@@ -1,5 +1,6 @@
 import { classifyLines } from "./classifyLines";
 import { groupTokensIntoLines } from "./groupIntoLines";
+import { mergeAdjacentTokens } from "./mergeAdjacentTokens";
 import type { ClassifiedLine, OcrToken } from "./types";
 import {
   createEmptySong,
@@ -27,7 +28,9 @@ const DEFAULT_SECTION_NAME = "Verse 1";
  */
 export function buildSongFromOcr(tokens: OcrToken[], title: string): Song {
   const song = createEmptySong(title);
-  const classified = classifyLines(groupTokensIntoLines(tokens));
+  const classified = classifyLines(groupTokensIntoLines(tokens).map(mergeAdjacentTokens)).filter(
+    (line) => !isNoiseLine(line)
+  );
 
   let currentSection = createSection(DEFAULT_SECTION_NAME);
   song.sections.push(currentSection);
@@ -85,6 +88,22 @@ function joinTokens(line: ClassifiedLine): string {
 }
 
 /**
+ * Measure numbers and time signatures printed above the staff (e.g. a lone
+ * "5" at the start of a system, or "4/4") get picked up as OCR text even
+ * though they're not chart content. Left alone, a short digits-only line
+ * lands between the chord line and the real lyric line and steals the
+ * "next lyric line" pairing. A real lyric line — in any language — is never
+ * pure digits, so it's safe to drop these before pairing.
+ */
+function isNoiseLine(line: ClassifiedLine): boolean {
+  return (
+    line.tokens.length > 0 &&
+    line.tokens.length <= 3 &&
+    line.tokens.every((t) => /^\d+(\/\d+)?$/.test(t.text.trim()))
+  );
+}
+
+/**
  * Aligns each chord token to the nearest lyric word by x-position (the chord
  * is printed directly above the word it applies to) and slices the lyric
  * line into segments at those anchor points.
@@ -125,8 +144,14 @@ function mergeChordAndLyricLine(chordLine: ClassifiedLine, lyricLine: Classified
     segments.push(createSegment({ chord: null, lyric: `${leadingWords} ` }));
   }
 
+  // A running cursor (not just `anchors[c]`) tracks which lyric words are
+  // already claimed, since multiple chords can anchor to the same nearest
+  // word when there are far fewer lyric tokens than chords (e.g. a chord
+  // line paired with a short or noisy lyric line) — without it, later
+  // segments would re-slice and repeat words an earlier segment already used.
+  let cursor = anchors[0] ?? 0;
   for (let c = 0; c < chordTokens.length; c++) {
-    const start = anchors[c];
+    const start = Math.max(anchors[c], cursor);
     const end = c + 1 < anchors.length ? Math.max(anchors[c + 1], start + 1) : lyricTokens.length;
     const words = lyricTokens.slice(start, end).map((t) => t.text);
     const isLast = end >= lyricTokens.length;
@@ -137,6 +162,7 @@ function mergeChordAndLyricLine(chordLine: ClassifiedLine, lyricLine: Classified
         confidence,
       })
     );
+    cursor = end;
   }
 
   return segments;

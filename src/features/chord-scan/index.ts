@@ -1,5 +1,6 @@
 export { isChordToken } from "./chordPattern";
 export { groupTokensIntoLines } from "./groupIntoLines";
+export { mergeAdjacentTokens } from "./mergeAdjacentTokens";
 export { classifyLines, CHORD_LINE_RATIO_THRESHOLD } from "./classifyLines";
 export { buildSongFromOcr } from "./buildSongFromOcr";
 export { recognizeTextWithGoogleVision, getGoogleVisionApiKey } from "./ocrProviders";
