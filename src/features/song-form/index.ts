@@ -11,3 +11,4 @@ export {
   removeLine,
   type SegmentLocation,
 } from "./editSong";
+export { SongEditorScreen } from "./screens/SongEditorScreen";
