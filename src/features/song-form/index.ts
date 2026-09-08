@@ -12,3 +12,4 @@ export {
   type SegmentLocation,
 } from "./editSong";
 export { SongEditorScreen } from "./screens/SongEditorScreen";
+export { SourceOverlayScreen } from "./screens/SourceOverlayScreen";

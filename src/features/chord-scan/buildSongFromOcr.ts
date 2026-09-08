@@ -26,8 +26,13 @@ const DEFAULT_SECTION_NAME = "Verse 1";
  * heuristic, not a guarantee. Segment.confidence reflects that draft-ness
  * inline so a review UI can surface it.
  */
-export function buildSongFromOcr(tokens: OcrToken[], title: string): Song {
+export function buildSongFromOcr(
+  tokens: OcrToken[],
+  title: string,
+  sourceImage?: { uri: string; width: number; height: number }
+): Song {
   const song = createEmptySong(title);
+  if (sourceImage) song.sourceImage = sourceImage;
   const classified = classifyLines(groupTokensIntoLines(tokens).map(mergeAdjacentTokens)).filter(
     (line) => !isNoiseLine(line)
   );
@@ -67,6 +72,7 @@ export function buildSongFromOcr(tokens: OcrToken[], title: string): Song {
               chord: token.text,
               lyric: idx === line.tokens.length - 1 ? "" : " ",
               confidence: line.chordTokenRatio,
+              chordPosition: tokenPosition(token),
             })
           )
         )
@@ -85,6 +91,10 @@ export function buildSongFromOcr(tokens: OcrToken[], title: string): Song {
 
 function joinTokens(line: ClassifiedLine): string {
   return line.tokens.map((t) => t.text).join(" ");
+}
+
+function tokenPosition(token: OcrToken): { x: number; y: number; width: number; height: number } {
+  return { x: token.x, y: token.y, width: token.width, height: token.height };
 }
 
 /**
@@ -113,7 +123,14 @@ function mergeChordAndLyricLine(chordLine: ClassifiedLine, lyricLine: Classified
   const lyricTokens = lyricLine.tokens;
 
   if (lyricTokens.length === 0) {
-    return chordTokens.map((token) => createSegment({ chord: token.text, lyric: "", confidence: chordLine.chordTokenRatio }));
+    return chordTokens.map((token) =>
+      createSegment({
+        chord: token.text,
+        lyric: "",
+        confidence: chordLine.chordTokenRatio,
+        chordPosition: tokenPosition(token),
+      })
+    );
   }
 
   // For each chord, find the closest lyric word at or after the previous chord's anchor,
@@ -160,6 +177,7 @@ function mergeChordAndLyricLine(chordLine: ClassifiedLine, lyricLine: Classified
         chord: chordTokens[c].text,
         lyric: words.join(" ") + (isLast ? "" : " "),
         confidence,
+        chordPosition: tokenPosition(chordTokens[c]),
       })
     );
     cursor = end;

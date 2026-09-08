@@ -26,6 +26,14 @@ export interface Segment {
    * low-confidence ones for the user to review.
    */
   confidence?: number;
+  /**
+   * Where this segment's chord was printed on the original scanned image
+   * (pixel coordinates in `Song.sourceImage`'s space), if this segment came
+   * from OCR. Lets a "view on original" screen redraw the (possibly edited
+   * or transposed) chord text directly over the spot it was recognized at.
+   * Undefined for hand-entered segments or ones with no chord.
+   */
+  chordPosition?: { x: number; y: number; width: number; height: number };
 }
 
 export interface Line {
@@ -48,6 +56,8 @@ export interface Song {
   /** Semitone offset currently applied relative to originalKey (0 = original key). */
   transposeSteps: number;
   sections: Section[];
+  /** The scanned image this song was built from, if any, for the "view on original" overlay screen. */
+  sourceImage?: { uri: string; width: number; height: number };
 }
 
 let idCounter = 0;

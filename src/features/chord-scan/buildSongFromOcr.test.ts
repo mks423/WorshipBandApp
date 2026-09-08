@@ -52,4 +52,21 @@ describe("buildSongFromOcr", () => {
     expect(segments.map((s) => s.chord)).toEqual(["G", "D"]);
     expect(segments.every((s) => s.lyric.trim() === "")).toBe(true);
   });
+
+  it("attaches the source image and each chord's original pixel position when given one", () => {
+    const tokens: OcrToken[] = [
+      token("G", 10, 40),
+      token("C", 90, 40),
+      token("Amazing", 8, 70),
+      token("grace", 85, 70),
+    ];
+    const sourceImage = { uri: "file:///chart.jpg", width: 800, height: 600 };
+
+    const song = buildSongFromOcr(tokens, "Amazing Grace", sourceImage);
+
+    expect(song.sourceImage).toEqual(sourceImage);
+    const segments = song.sections[0].lines[0].segments;
+    expect(segments[0].chordPosition).toEqual({ x: 10, y: 40, width: 8, height: 20 });
+    expect(segments[1].chordPosition).toEqual({ x: 90, y: 40, width: 8, height: 20 });
+  });
 });

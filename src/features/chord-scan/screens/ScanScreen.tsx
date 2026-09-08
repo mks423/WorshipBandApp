@@ -22,6 +22,8 @@ interface ScanScreenProps {
 interface PickedImage {
   uri: string;
   base64: string;
+  width: number;
+  height: number;
 }
 
 export function ScanScreen({ onSongScanned }: ScanScreenProps) {
@@ -60,7 +62,7 @@ export function ScanScreen({ onSongScanned }: ScanScreenProps) {
       Alert.alert("오류", "이미지를 읽어오지 못했습니다. 다시 시도해주세요.");
       return;
     }
-    setImage({ uri: asset.uri, base64: asset.base64 });
+    setImage({ uri: asset.uri, base64: asset.base64, width: asset.width, height: asset.height });
   }
 
   async function scan() {
@@ -82,7 +84,11 @@ export function ScanScreen({ onSongScanned }: ScanScreenProps) {
         Alert.alert("인식 실패", "이미지에서 텍스트를 찾지 못했습니다. 더 선명한 이미지로 다시 시도해주세요.");
         return;
       }
-      const song = buildSongFromOcr(tokens, title.trim() || "제목 없는 곡");
+      const song = buildSongFromOcr(tokens, title.trim() || "제목 없는 곡", {
+        uri: image.uri,
+        width: image.width,
+        height: image.height,
+      });
       onSongScanned(song);
     } catch (error) {
       Alert.alert("스캔 실패", error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");

@@ -15,6 +15,7 @@ import {
 } from "../editSong";
 import { transposeSong } from "../../transpose";
 import type { Line, Section, Segment, Song } from "../../../types/song";
+import { SourceOverlayScreen } from "./SourceOverlayScreen";
 
 interface SongEditorScreenProps {
   song: Song;
@@ -23,49 +24,65 @@ interface SongEditorScreenProps {
 }
 
 export function SongEditorScreen({ song, onSongChange, onDone }: SongEditorScreenProps) {
+  const [viewMode, setViewMode] = useState<"edit" | "original">("edit");
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <TextInput
-          style={styles.titleInput}
-          value={song.title}
-          onChangeText={(title) => onSongChange({ ...song, title })}
-          placeholder="곡 제목"
-        />
-
-        <View style={styles.transposeRow}>
-          <Pressable style={styles.transposeButton} onPress={() => onSongChange(transposeSong(song, -1))}>
-            <Text style={styles.transposeButtonText}>- 반음</Text>
-          </Pressable>
-          <Text style={styles.transposeLabel}>
-            원key 대비 {song.transposeSteps >= 0 ? "+" : ""}
-            {song.transposeSteps}
-          </Text>
-          <Pressable style={styles.transposeButton} onPress={() => onSongChange(transposeSong(song, 1))}>
-            <Text style={styles.transposeButtonText}>+ 반음</Text>
-          </Pressable>
-        </View>
-
-        {song.sections.map((section) => (
-          <SectionEditor
-            key={section.id}
-            song={song}
-            section={section}
-            onSongChange={onSongChange}
+      {viewMode === "edit" ? (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <TextInput
+            style={styles.titleInput}
+            value={song.title}
+            onChangeText={(title) => onSongChange({ ...song, title })}
+            placeholder="곡 제목"
           />
-        ))}
 
-        <Pressable
-          style={styles.addSectionButton}
-          onPress={() => onSongChange(addSection(song, "새 섹션"))}
-        >
-          <Text style={styles.addSectionButtonText}>+ 섹션 추가</Text>
+          <View style={styles.transposeRow}>
+            <Pressable style={styles.transposeButton} onPress={() => onSongChange(transposeSong(song, -1))}>
+              <Text style={styles.transposeButtonText}>- 반음</Text>
+            </Pressable>
+            <Text style={styles.transposeLabel}>
+              원key 대비 {song.transposeSteps >= 0 ? "+" : ""}
+              {song.transposeSteps}
+            </Text>
+            <Pressable style={styles.transposeButton} onPress={() => onSongChange(transposeSong(song, 1))}>
+              <Text style={styles.transposeButtonText}>+ 반음</Text>
+            </Pressable>
+          </View>
+
+          {song.sections.map((section) => (
+            <SectionEditor
+              key={section.id}
+              song={song}
+              section={section}
+              onSongChange={onSongChange}
+            />
+          ))}
+
+          <Pressable
+            style={styles.addSectionButton}
+            onPress={() => onSongChange(addSection(song, "새 섹션"))}
+          >
+            <Text style={styles.addSectionButtonText}>+ 섹션 추가</Text>
+          </Pressable>
+        </ScrollView>
+      ) : (
+        <SourceOverlayScreen song={song} />
+      )}
+
+      <View style={styles.bottomBar}>
+        {song.sourceImage && (
+          <Pressable
+            style={styles.bottomButton}
+            onPress={() => setViewMode(viewMode === "edit" ? "original" : "edit")}
+          >
+            <Text style={styles.bottomButtonText}>{viewMode === "edit" ? "원본 보기" : "편집 화면"}</Text>
+          </Pressable>
+        )}
+        <Pressable style={styles.bottomButton} onPress={onDone}>
+          <Text style={styles.bottomButtonText}>다시 스캔하기</Text>
         </Pressable>
-      </ScrollView>
-
-      <Pressable style={styles.doneButton} onPress={onDone}>
-        <Text style={styles.doneButtonText}>다시 스캔하기</Text>
-      </Pressable>
+      </View>
     </View>
   );
 }
@@ -296,12 +313,16 @@ const styles = StyleSheet.create({
     color: "#2f6feb",
     fontWeight: "700",
   },
-  doneButton: {
+  bottomBar: {
+    flexDirection: "row",
+  },
+  bottomButton: {
+    flex: 1,
     padding: 16,
     alignItems: "center",
     backgroundColor: "#eee",
   },
-  doneButtonText: {
+  bottomButtonText: {
     fontWeight: "700",
   },
 });
