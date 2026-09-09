@@ -1,6 +1,7 @@
 import { classifyLines } from "./classifyLines";
 import { groupTokensIntoLines } from "./groupIntoLines";
 import { mergeAdjacentTokens } from "./mergeAdjacentTokens";
+import { repairMisreadTokensOnLine } from "./repairMisreadTokens";
 import { splitGluedTokensOnLine } from "./splitGluedTokens";
 import type { ClassifiedLine, OcrToken } from "./types";
 import {
@@ -35,7 +36,10 @@ export function buildSongFromOcr(
   const song = createEmptySong(title);
   if (sourceImage) song.sourceImage = sourceImage;
   const classified = classifyLines(
-    groupTokensIntoLines(tokens).map(mergeAdjacentTokens).map(splitGluedTokensOnLine)
+    groupTokensIntoLines(tokens)
+      .map(mergeAdjacentTokens)
+      .map(splitGluedTokensOnLine)
+      .map(repairMisreadTokensOnLine)
   ).filter((line) => !isNoiseLine(line));
 
   let currentSection = createSection(DEFAULT_SECTION_NAME);

@@ -32,6 +32,20 @@ describe("buildSongFromOcr", () => {
     ]);
   });
 
+  it("repairs an OCR-misread chord ('8' for 'B') so it's still recognized and paired with its lyric", () => {
+    const tokens: OcrToken[] = [
+      token("8m7", 10, 0),
+      token("E", 60, 0),
+      token("Jesus", 8, 40),
+      token("is", 85, 40),
+    ];
+
+    const song = buildSongFromOcr(tokens, "Untitled");
+
+    const segments = song.sections[0].lines[0].segments;
+    expect(segments.map((s) => s.chord)).toEqual(["Bm7", "E"]);
+  });
+
   it("treats a line with no matching chord line above it as plain lyric", () => {
     const tokens: OcrToken[] = [token("Just", 10, 0), token("a", 60, 0), token("lyric", 90, 0), token("line", 140, 0)];
 

@@ -1,7 +1,8 @@
-export { isChordToken, splitGluedChordToken } from "./chordPattern";
+export { isChordToken, splitGluedChordToken, repairMisreadChord } from "./chordPattern";
 export { groupTokensIntoLines } from "./groupIntoLines";
 export { mergeAdjacentTokens } from "./mergeAdjacentTokens";
 export { splitGluedTokensOnLine } from "./splitGluedTokens";
+export { repairMisreadTokensOnLine } from "./repairMisreadTokens";
 export { classifyLines, CHORD_LINE_RATIO_THRESHOLD } from "./classifyLines";
 export { buildSongFromOcr, buildSongsFromPages } from "./buildSongFromOcr";
 export { recognizeTextWithGoogleVision, getGoogleVisionApiKey } from "./ocrProviders";

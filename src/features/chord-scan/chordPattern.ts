@@ -106,6 +106,57 @@ export function isChordToken(rawText: string): boolean {
 }
 
 /**
+ * Characters Google Vision commonly misreads *as*, on short chord tokens,
+ * because their glyphs look alike — each key is the misread character seen
+ * in OCR output, mapping to the one character it's plausibly standing in
+ * for. One-directional: OCR turning a printed digit into a look-alike
+ * letter ("5" -> "S") is a real, common failure mode; the reverse ("S" was
+ * actually meant to print as "5") isn't a real misread and would only add
+ * false-correction risk. Deliberately case-sensitive too: lowercase "s" (as
+ * in ordinary lyric words) is never a key, only uppercase "S", so this can't
+ * start reinterpreting real lyric text.
+ */
+const CONFUSION_CANDIDATES: Record<string, string[]> = {
+  "8": ["B"],
+  l: ["1"],
+  I: ["1"],
+  S: ["5"],
+  Z: ["2"],
+};
+
+/**
+ * Repairs a token OCR misread by exactly one confusable character, if doing
+ * so turns it into a valid chord — e.g. "8m7" (a misread "B") becomes "Bm7".
+ * This works because chord spelling is drawn from a small, closed grammar
+ * (see CHORD_REGEX above): a token that's one substitution away from being
+ * valid is very likely that chord, not a coincidence.
+ *
+ * Only acts when exactly one substitution position yields a valid chord. If
+ * more than one candidate would also work, which one is actually correct is
+ * genuinely ambiguous, so the token is left as-is for the user to fix rather
+ * than guessing. Note CHORD_REGEX is fully anchored (`^...$`), so a lyric
+ * word can only ever be "repaired" if it already starts with a bare note
+ * letter *and* everything after some single substitution would also have to
+ * parse as valid chord grammar — in practice this doesn't happen to real
+ * English words (see chordPattern.test.ts).
+ */
+export function repairMisreadChord(text: string): string {
+  if (isChordToken(text)) return text;
+
+  const candidates = new Set<string>();
+  for (let i = 0; i < text.length; i++) {
+    const replacements = CONFUSION_CANDIDATES[text[i]];
+    if (!replacements) continue;
+    for (const replacement of replacements) {
+      const candidate = text.slice(0, i) + replacement + text.slice(i + 1);
+      if (isChordToken(candidate)) candidates.add(candidate);
+    }
+  }
+
+  return candidates.size === 1 ? [...candidates][0] : text;
+}
+
+/**
  * Attempts to split one OCR token that reads as two chords glued together
  * with no visual gap (common when a chart packs multiple chords tightly on
  * one beat, e.g. "Am7G/B" or "C#m7C") into its separate chord symbols.

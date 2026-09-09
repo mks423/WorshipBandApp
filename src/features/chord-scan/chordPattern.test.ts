@@ -1,4 +1,4 @@
-import { isChordToken, splitGluedChordToken } from "./chordPattern";
+import { isChordToken, repairMisreadChord, splitGluedChordToken } from "./chordPattern";
 
 describe("isChordToken", () => {
   it("accepts plain major/minor chords", () => {
@@ -127,5 +127,38 @@ describe("splitGluedChordToken", () => {
   it("leaves ordinary lyric words untouched", () => {
     expect(splitGluedChordToken("Amazing")).toEqual(["Amazing"]);
     expect(splitGluedChordToken("Amen")).toEqual(["Amen"]);
+  });
+});
+
+describe("repairMisreadChord", () => {
+  it("fixes a misread '8' back to 'B'", () => {
+    expect(repairMisreadChord("8m7")).toBe("Bm7");
+    expect(repairMisreadChord("8")).toBe("B");
+  });
+
+  it("fixes a misread extension digit ('S' for '5', 'Z' for '2', 'l' for '1')", () => {
+    expect(repairMisreadChord("AaddZ")).toBe("Aadd2");
+    expect(repairMisreadChord("B7bS")).toBe("B7b5");
+    // Only the second "1" of "add11" was misread as "l" — the correction only
+    // has to fix that one character since the rest of the token already reads right.
+    expect(repairMisreadChord("Caddl1")).toBe("Cadd11");
+  });
+
+  it("leaves an already-valid chord untouched", () => {
+    expect(repairMisreadChord("Bm7")).toBe("Bm7");
+  });
+
+  it("leaves a token unchanged when no single substitution makes it valid", () => {
+    expect(repairMisreadChord("8888")).toBe("8888");
+    // Both digits of "11" misread at once needs two simultaneous fixes,
+    // which is out of scope — only single-character misreads are repaired.
+    expect(repairMisreadChord("CaddIl")).toBe("CaddIl");
+  });
+
+  it("never turns an ordinary lyric word into a chord", () => {
+    expect(repairMisreadChord("Ball")).toBe("Ball");
+    expect(repairMisreadChord("Base")).toBe("Base");
+    expect(repairMisreadChord("Blessed")).toBe("Blessed");
+    expect(repairMisreadChord("grace")).toBe("grace");
   });
 });
