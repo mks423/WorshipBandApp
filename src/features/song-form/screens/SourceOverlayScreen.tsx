@@ -94,7 +94,7 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
     resolveWebImageUri(sourceUri).then((resolved) => {
       if (cancelled) return;
       setResolvedImageUri(resolved);
-      if (resolved !== sourceUri && resolved.startsWith("blob:")) objectUrlToRevoke = resolved;
+      if (resolved && resolved !== sourceUri && resolved.startsWith("blob:")) objectUrlToRevoke = resolved;
     });
     return () => {
       cancelled = true;
