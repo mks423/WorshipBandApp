@@ -13,7 +13,7 @@ interface SongEditorScreenProps {
   song: Song;
   onSongChange: (song: Song) => void;
   onDone: () => void;
-  /** Label for the bottom-bar "done" button — differs by how this screen was reached (e.g. "목록으로" from a multi-song batch, "다시 스캔하기" otherwise). */
+  /** Label for the bottom-bar "done" button — differs by how this screen was reached (e.g. "목록으로" from a multi-song batch, "완료" otherwise). */
   doneLabel?: string;
   /** This song's position within a multi-page scan batch (0-based), for the page-flip row. Omit for a single scanned song. */
   pageIndex?: number;
@@ -27,7 +27,7 @@ export function SongEditorScreen({
   song,
   onSongChange,
   onDone,
-  doneLabel = "다시 스캔하기",
+  doneLabel = "완료",
   pageIndex,
   pageCount,
   onNavigatePage,
