@@ -3,6 +3,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import { Platform } from "react-native";
 
 import type { Song } from "../../types/song";
+import { deleteWebImage, isWebImageRef, storeImageForWeb } from "../../utils/webImageStore";
 
 const STORAGE_KEY = "wba.library.v1";
 
@@ -43,18 +44,37 @@ async function saveLibrary(songs: Song[]): Promise<void> {
 }
 
 /**
- * Copies a song's source image into the app's permanent document directory,
- * if it isn't already there. Camera/file-picker URIs point at OS-managed
- * cache locations that can be cleared between launches, and a PDF-rasterized
- * page's URI is a large inline base64 data URI that would otherwise get
- * duplicated straight into the persisted library blob every time it's
- * re-saved. Native only — on web the picked URI is already whatever the
- * browser is willing to keep around, and there's no comparable durable
- * filesystem to copy into.
+ * Copies a song's source image into durable storage, if it isn't already
+ * there, so the persisted library blob only ever holds a small reference to
+ * it rather than the image itself.
+ *
+ * On native this means copying the file into the app's permanent document
+ * directory: camera/file-picker URIs point at OS-managed cache locations
+ * that can be cleared between launches, and a PDF-rasterized page's URI is
+ * a large inline base64 data URI that would otherwise get duplicated
+ * straight into the persisted blob on every save.
+ *
+ * On web there's no comparable filesystem, but embedding the image inline
+ * is what was blowing through localStorage's ~5-10MB per-origin quota (what
+ * AsyncStorage sits on for web) — a single photographed chart alone can
+ * exceed that. Data/blob URIs are moved into IndexedDB instead, whose quota
+ * is a large fraction of free disk space.
  */
 async function ensureDurableImage(song: Song): Promise<Song> {
-  if (!song.sourceImage || Platform.OS === "web") return song;
+  if (!song.sourceImage) return song;
   const { uri } = song.sourceImage;
+
+  if (Platform.OS === "web") {
+    if (isWebImageRef(uri) || (!uri.startsWith("data:") && !uri.startsWith("blob:"))) return song;
+    try {
+      const idbUri = await storeImageForWeb(song.id, uri);
+      return { ...song, sourceImage: { ...song.sourceImage, uri: idbUri } };
+    } catch {
+      // Best effort — if IndexedDB storage fails, save the song with its original URI rather than losing it entirely.
+      return song;
+    }
+  }
+
   const sourcesDir = getSourcesDir();
   if (uri.startsWith(sourcesDir.uri)) return song;
 
@@ -113,4 +133,11 @@ export async function deleteSongs(ids: string[]): Promise<void> {
   const idSet = new Set(ids);
   const library = await loadLibrary();
   await saveLibrary(library.filter((s) => !idSet.has(s.id)));
+
+  // Unlike a native file, an orphaned IndexedDB entry isn't just an unused
+  // file sitting on disk — it counts against the same quota this whole fix
+  // is about, so it's worth actually freeing on web.
+  if (Platform.OS === "web") {
+    await Promise.all(ids.map((id) => deleteWebImage(id).catch(() => undefined)));
+  }
 }

@@ -15,6 +15,7 @@ import {
 } from "../editSong";
 import { ConfirmModal } from "./ConfirmModal";
 import { SectionLabelModal } from "./SectionLabelModal";
+import { isWebImageRef, resolveWebImageUri } from "../../../utils/webImageStore";
 
 /** A touch that moves less than this (in screen px) is treated as a tap, not a drag. */
 const DRAG_THRESHOLD = 4;
@@ -76,6 +77,30 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
   const [pendingAction, setPendingAction] = useState<PendingChordAction | null>(null);
   const [addSectionMode, setAddSectionMode] = useState(false);
   const [labelModalState, setLabelModalState] = useState<LabelModalState | null>(null);
+  const [resolvedImageUri, setResolvedImageUri] = useState<string | null>(null);
+
+  // On web, a saved image is stored as a wba-idb:// reference (see
+  // webImageStore.ts) rather than something <Image> can render directly —
+  // resolve it to a real blob: URL, and revoke that URL once it's no longer
+  // needed. On native this resolves immediately to the URI unchanged.
+  useEffect(() => {
+    const sourceUri = song.sourceImage?.uri;
+    if (!sourceUri) {
+      setResolvedImageUri(null);
+      return;
+    }
+    let cancelled = false;
+    let objectUrlToRevoke: string | null = null;
+    resolveWebImageUri(sourceUri).then((resolved) => {
+      if (cancelled) return;
+      setResolvedImageUri(resolved);
+      if (resolved !== sourceUri && resolved.startsWith("blob:")) objectUrlToRevoke = resolved;
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrlToRevoke) URL.revokeObjectURL(objectUrlToRevoke);
+    };
+  }, [song.sourceImage?.uri]);
 
   // Flipping to a different page swaps in a different Song (this component
   // instance stays mounted), so any in-progress edit belongs to a segment
@@ -98,7 +123,11 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
     );
   }
 
-  const { uri, width: sourceWidth, height: sourceHeight } = song.sourceImage;
+  const { uri: sourceUri, width: sourceWidth, height: sourceHeight } = song.sourceImage;
+  // A wba-idb:// reference isn't renderable as-is — wait for the resolve
+  // effect rather than briefly handing it to <Image> and triggering a
+  // failed load for an unknown URL scheme.
+  const uri = resolvedImageUri ?? (isWebImageRef(sourceUri) ? undefined : sourceUri);
   const scale = displayWidth > 0 ? displayWidth / sourceWidth : 0;
 
   const chordOverlays: ChordOverlay[] = song.sections.flatMap((section) =>
@@ -278,7 +307,7 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
           disabled={(!addChordMode && !addSectionMode) || comparing}
           onPress={handleImagePress}
         >
-          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+          {uri && <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />}
         </Pressable>
         {scale > 0 &&
           !comparing &&
