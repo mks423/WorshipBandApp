@@ -22,19 +22,23 @@ export function SongListScreen({ songs, onSelect, onRescan }: SongListScreenProp
         contentContainerStyle={styles.list}
         data={songs}
         keyExtractor={(song) => song.id}
-        renderItem={({ item, index }) => (
-          <View style={styles.row}>
-            <View style={styles.rowInfo}>
-              <Text style={styles.rowTitle} numberOfLines={1}>
-                {index + 1}. {item.title}
-              </Text>
-              <Text style={styles.rowKey}>인식된 키: {item.originalKey ?? "알 수 없음"}</Text>
+        renderItem={({ item, index }) => {
+          const groupSize = item.groupId ? songs.filter((s) => s.groupId === item.groupId).length : 1;
+          const label = item.groupId ? `${item.title} (${item.pageNumber}/${groupSize}쪽)` : item.title;
+          return (
+            <View style={styles.row}>
+              <View style={styles.rowInfo}>
+                <Text style={styles.rowTitle} numberOfLines={1}>
+                  {index + 1}. {label}
+                </Text>
+                <Text style={styles.rowKey}>인식된 키: {item.originalKey ?? "알 수 없음"}</Text>
+              </View>
+              <Pressable style={styles.editButton} onPress={() => onSelect(index)}>
+                <Text style={styles.editButtonText}>선택</Text>
+              </Pressable>
             </View>
-            <Pressable style={styles.editButton} onPress={() => onSelect(index)}>
-              <Text style={styles.editButtonText}>선택</Text>
-            </Pressable>
-          </View>
-        )}
+          );
+        }}
       />
       <Pressable style={styles.rescanButton} onPress={onRescan}>
         <Text style={styles.rescanButtonText}>새로 스캔하기</Text>

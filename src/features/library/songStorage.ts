@@ -79,16 +79,28 @@ async function ensureDurableImage(song: Song): Promise<Song> {
  * on every subsequent edit.
  */
 export async function upsertSong(song: Song): Promise<Song> {
-  const durable = await ensureDurableImage(song);
-  const library = await loadLibrary();
-  const index = library.findIndex((s) => s.id === durable.id);
-  const next = index === -1 ? [...library, durable] : library.map((s, i) => (i === index ? durable : s));
-  await saveLibrary(next);
+  const [durable] = await upsertSongs([song]);
   return durable;
+}
+
+/** Same as `upsertSong`, but for several songs (e.g. every page of one scanned PDF) in a single read-modify-write round trip. */
+export async function upsertSongs(songs: Song[]): Promise<Song[]> {
+  const durableSongs = await Promise.all(songs.map(ensureDurableImage));
+  const library = await loadLibrary();
+  const byId = new Map(library.map((s) => [s.id, s]));
+  for (const song of durableSongs) byId.set(song.id, song);
+  await saveLibrary([...byId.values()]);
+  return durableSongs;
 }
 
 /** Removes one song from the persisted library. Its durable image file, if any, is left in place (harmless orphaned file, not worth the extra failure surface of deleting it here). */
 export async function deleteSong(id: string): Promise<void> {
+  await deleteSongs([id]);
+}
+
+/** Removes several songs at once (e.g. every page of one document) in a single read-modify-write round trip. */
+export async function deleteSongs(ids: string[]): Promise<void> {
+  const idSet = new Set(ids);
   const library = await loadLibrary();
-  await saveLibrary(library.filter((s) => s.id !== id));
+  await saveLibrary(library.filter((s) => !idSet.has(s.id)));
 }

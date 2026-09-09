@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, SafeAreaView, StyleSheet, View } from "react-native";
 
 import { ScanScreen } from "./src/features/chord-scan";
-import { LibraryScreen, deleteSong, loadLibrary, upsertSong } from "./src/features/library";
+import { LibraryScreen, deleteSongs, loadLibrary, upsertSong, upsertSongs } from "./src/features/library";
 import { SongEditorScreen, SongListScreen } from "./src/features/song-form";
 import type { Song } from "./src/types/song";
 
@@ -24,10 +24,7 @@ export default function App() {
   }, []);
 
   async function handleScanned(scanned: Song[]) {
-    const durableSongs: Song[] = [];
-    for (const song of scanned) {
-      durableSongs.push(await upsertSong(song));
-    }
+    const durableSongs = await upsertSongs(scanned);
     setLibrary((prev) => mergeSongs(prev, durableSongs));
     setSongs(durableSongs);
     setShowScan(false);
@@ -43,16 +40,20 @@ export default function App() {
     });
   }
 
-  function openFromLibrary(id: string) {
-    const song = library.find((s) => s.id === id);
-    if (!song) return;
-    setSongs([song]);
+  /** `key` is a song's id, or a multi-page document's shared groupId — opens every page of that document together, sorted by pageNumber, so page-flip navigation works exactly like a fresh scan. */
+  function openFromLibrary(key: string) {
+    const groupSongs = library
+      .filter((s) => (s.groupId ?? s.id) === key)
+      .sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0));
+    if (groupSongs.length === 0) return;
+    setSongs(groupSongs);
     setEditingIndex(0);
   }
 
-  async function handleDelete(id: string) {
-    await deleteSong(id);
-    setLibrary((prev) => prev.filter((s) => s.id !== id));
+  async function handleDelete(key: string) {
+    const ids = library.filter((s) => (s.groupId ?? s.id) === key).map((s) => s.id);
+    await deleteSongs(ids);
+    setLibrary((prev) => prev.filter((s) => !ids.includes(s.id)));
   }
 
   function backToLibrary() {

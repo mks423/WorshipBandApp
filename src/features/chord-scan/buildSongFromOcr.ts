@@ -31,10 +31,15 @@ const DEFAULT_SECTION_NAME = "Verse 1";
 export function buildSongFromOcr(
   tokens: OcrToken[],
   title: string,
-  sourceImage?: { uri: string; width: number; height: number }
+  sourceImage?: { uri: string; width: number; height: number },
+  group?: { groupId: string; pageNumber: number }
 ): Song {
   const song = createEmptySong(title);
   if (sourceImage) song.sourceImage = sourceImage;
+  if (group) {
+    song.groupId = group.groupId;
+    song.pageNumber = group.pageNumber;
+  }
   const classified = classifyLines(
     groupTokensIntoLines(tokens)
       .map(mergeAdjacentTokens)
@@ -99,17 +104,33 @@ export function buildSongFromOcr(
  * photo, or one per page of a scanned PDF) — each page of sheet music is its
  * own song to review and edit separately, not merged into one. Pages with no
  * recognized text are skipped (e.g. a blank PDF page).
+ *
+ * Pages that share a `groupId` (the pages of one imported PDF) carry that
+ * same id through to the built songs, plus their `pageNumber`, so the
+ * library can show them as a single browsable entry instead of scattering
+ * them into unrelated rows.
  */
 export function buildSongsFromPages(
   pages: Array<{
     tokens: OcrToken[];
     title: string;
     sourceImage?: { uri: string; width: number; height: number };
+    groupId?: string;
+    pageNumber?: number;
   }>
 ): Song[] {
   return pages
     .filter((page) => page.tokens.length > 0)
-    .map((page) => buildSongFromOcr(page.tokens, page.title, page.sourceImage));
+    .map((page) =>
+      buildSongFromOcr(
+        page.tokens,
+        page.title,
+        page.sourceImage,
+        page.groupId !== undefined && page.pageNumber !== undefined
+          ? { groupId: page.groupId, pageNumber: page.pageNumber }
+          : undefined
+      )
+    );
 }
 
 function joinTokens(line: ClassifiedLine): string {

@@ -23,6 +23,9 @@ interface PendingFile {
   width: number;
   height: number;
   title: string;
+  /** Shared across every page rasterized from the same PDF, so they can stay grouped as one document downstream. */
+  groupId?: string;
+  pageNumber?: number;
 }
 
 export function ScanScreen({ onSongsScanned }: ScanScreenProps) {
@@ -124,6 +127,8 @@ export function ScanScreen({ onSongsScanned }: ScanScreenProps) {
           tokens,
           title: file.title.trim() || "제목 없는 곡",
           sourceImage: { uri: file.uri, width: file.width, height: file.height },
+          groupId: file.groupId,
+          pageNumber: file.pageNumber,
         });
       }
 
@@ -159,16 +164,20 @@ export function ScanScreen({ onSongsScanned }: ScanScreenProps) {
 
       {pendingFiles.length > 0 && (
         <View style={styles.fileList}>
-          {pendingFiles.map((file, index) => (
-            <View key={file.id} style={styles.fileRow}>
-              <Text style={styles.fileRowText} numberOfLines={1}>
-                {index + 1}. {file.title}
-              </Text>
-              <Pressable onPress={() => removeFile(file.id)}>
-                <Text style={styles.fileRowRemove}>삭제</Text>
-              </Pressable>
-            </View>
-          ))}
+          {pendingFiles.map((file, index) => {
+            const groupSize = file.groupId ? pendingFiles.filter((f) => f.groupId === file.groupId).length : 1;
+            const label = file.groupId ? `${file.title} (${file.pageNumber}/${groupSize})` : file.title;
+            return (
+              <View key={file.id} style={styles.fileRow}>
+                <Text style={styles.fileRowText} numberOfLines={1}>
+                  {index + 1}. {label}
+                </Text>
+                <Pressable onPress={() => removeFile(file.id)}>
+                  <Text style={styles.fileRowRemove}>삭제</Text>
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
       )}
 
@@ -209,8 +218,17 @@ interface RasterizedPage {
   width: number;
   height: number;
   title: string;
+  groupId?: string;
+  pageNumber?: number;
 }
 
+/**
+ * Rasterizes every page of a PDF into its own image, tagged with a shared
+ * `groupId` (and a 1-based `pageNumber`) so the library can later show them
+ * as a single document — like ForScore's PDF entries — instead of as
+ * unrelated songs. A single-page PDF gets no groupId; there's nothing to
+ * group it with.
+ */
 async function rasterizePdf(
   asset: DocumentPicker.DocumentPickerAsset,
   renderer: PdfPageRendererHandle | null
@@ -222,13 +240,16 @@ async function rasterizePdf(
     return [];
   }
   const baseName = stripExtension(asset.name);
+  const groupId = rendered.length > 1 ? createLocalId() : undefined;
   return rendered.map((page, index) => ({
     id: createLocalId(),
     uri: `data:image/png;base64,${page.base64}`,
     base64: page.base64,
     width: page.width,
     height: page.height,
-    title: rendered.length > 1 ? `${baseName} (${index + 1}/${rendered.length})` : baseName,
+    title: baseName,
+    groupId,
+    pageNumber: groupId ? index + 1 : undefined,
   }));
 }
 

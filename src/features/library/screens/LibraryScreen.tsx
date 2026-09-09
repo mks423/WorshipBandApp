@@ -6,9 +6,34 @@ import type { Song } from "../../../types/song";
 
 interface LibraryScreenProps {
   songs: Song[];
-  onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
+  /** Called with a song's id, or a multi-page document's groupId, when the user picks it. */
+  onSelect: (key: string) => void;
+  /** Called with a song's id, or a multi-page document's groupId (deleting every page), when confirmed. */
+  onDelete: (key: string) => void;
   onScan: () => void;
+}
+
+interface SongGroup {
+  key: string;
+  title: string;
+  originalKey: string | null;
+  pageCount: number;
+}
+
+/** Collapses the pages of one imported document (sharing a `groupId`) into a single row, like ForScore's PDF entries — a standalone song (no groupId) is its own one-page "group". */
+function groupSongs(songs: Song[]): SongGroup[] {
+  const order: string[] = [];
+  const byKey = new Map<string, Song[]>();
+  for (const song of songs) {
+    const key = song.groupId ?? song.id;
+    if (!byKey.has(key)) order.push(key);
+    byKey.set(key, [...(byKey.get(key) ?? []), song]);
+  }
+  return order.map((key) => {
+    const pages = [...(byKey.get(key) ?? [])].sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0));
+    const first = pages[0];
+    return { key, title: first.title, originalKey: first.originalKey, pageCount: pages.length };
+  });
 }
 
 /**
@@ -16,37 +41,41 @@ interface LibraryScreenProps {
  * relaunch lands on once anything has been scanned — the scan flow itself
  * stays a separate action ("새로 스캔하기") rather than the default entry
  * point, so previously reviewed charts don't need to be re-scanned to see
- * them again.
+ * them again. Pages that came from the same imported PDF show as one row.
  */
 export function LibraryScreen({ songs, onSelect, onDelete, onScan }: LibraryScreenProps) {
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const pendingDeleteTitle = songs.find((s) => s.id === pendingDeleteId)?.title ?? "";
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const groups = groupSongs(songs);
+  const pendingDeleteGroup = groups.find((g) => g.key === pendingDeleteKey);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>내 악보 ({songs.length}곡)</Text>
+      <Text style={styles.heading}>내 악보 ({groups.length}곡)</Text>
 
-      {songs.length === 0 ? (
+      {groups.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>저장된 악보가 없습니다. 악보를 스캔해서 추가해보세요.</Text>
         </View>
       ) : (
         <FlatList
           contentContainerStyle={styles.list}
-          data={songs}
-          keyExtractor={(song) => song.id}
+          data={groups}
+          keyExtractor={(group) => group.key}
           renderItem={({ item }) => (
             <View style={styles.row}>
-              <Pressable style={styles.rowInfo} onPress={() => onSelect(item.id)}>
+              <Pressable style={styles.rowInfo} onPress={() => onSelect(item.key)}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
                   {item.title}
                 </Text>
-                <Text style={styles.rowKey}>인식된 키: {item.originalKey ?? "알 수 없음"}</Text>
+                <Text style={styles.rowKey}>
+                  인식된 키: {item.originalKey ?? "알 수 없음"}
+                  {item.pageCount > 1 ? ` · ${item.pageCount}페이지` : ""}
+                </Text>
               </Pressable>
-              <Pressable style={styles.selectButton} onPress={() => onSelect(item.id)}>
+              <Pressable style={styles.selectButton} onPress={() => onSelect(item.key)}>
                 <Text style={styles.selectButtonText}>선택</Text>
               </Pressable>
-              <Pressable style={styles.deleteButton} onPress={() => setPendingDeleteId(item.id)}>
+              <Pressable style={styles.deleteButton} onPress={() => setPendingDeleteKey(item.key)}>
                 <Text style={styles.deleteButtonText}>삭제</Text>
               </Pressable>
             </View>
@@ -59,16 +88,20 @@ export function LibraryScreen({ songs, onSelect, onDelete, onScan }: LibraryScre
       </Pressable>
 
       <ConfirmModal
-        visible={pendingDeleteId !== null}
+        visible={pendingDeleteKey !== null}
         title="악보 삭제"
-        message={`"${pendingDeleteTitle}"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.`}
+        message={
+          pendingDeleteGroup && pendingDeleteGroup.pageCount > 1
+            ? `"${pendingDeleteGroup.title}" (${pendingDeleteGroup.pageCount}페이지)을(를) 모두 삭제할까요? 이 작업은 되돌릴 수 없습니다.`
+            : `"${pendingDeleteGroup?.title ?? ""}"을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.`
+        }
         confirmLabel="삭제"
         destructive
         onConfirm={() => {
-          if (pendingDeleteId) onDelete(pendingDeleteId);
-          setPendingDeleteId(null);
+          if (pendingDeleteKey) onDelete(pendingDeleteKey);
+          setPendingDeleteKey(null);
         }}
-        onCancel={() => setPendingDeleteId(null)}
+        onCancel={() => setPendingDeleteKey(null)}
       />
     </View>
   );

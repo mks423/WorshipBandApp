@@ -58,6 +58,10 @@ export interface Song {
   sections: Section[];
   /** The scanned image this song was built from, if any, for the "view on original" overlay screen. */
   sourceImage?: { uri: string; width: number; height: number };
+  /** Id shared by every page of the same imported document (e.g. a multi-page PDF), so the library can show them as one entry and reopen them together. Undefined for a single-page scan or a hand-entered song. */
+  groupId?: string;
+  /** 1-based position within `groupId`'s pages, for sort order and page-flip navigation. Undefined when `groupId` is. */
+  pageNumber?: number;
 }
 
 let idCounter = 0;
