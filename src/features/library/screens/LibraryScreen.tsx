@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ConfirmModal } from "../../song-form";
 import type { Song } from "../../../types/song";
+import { groupSongs } from "../groupSongs";
 
 interface LibraryScreenProps {
   songs: Song[];
@@ -11,29 +12,6 @@ interface LibraryScreenProps {
   /** Called with a song's id, or a multi-page document's groupId (deleting every page), when confirmed. */
   onDelete: (key: string) => void;
   onScan: () => void;
-}
-
-interface SongGroup {
-  key: string;
-  title: string;
-  originalKey: string | null;
-  pageCount: number;
-}
-
-/** Collapses the pages of one imported document (sharing a `groupId`) into a single row, like ForScore's PDF entries — a standalone song (no groupId) is its own one-page "group". */
-function groupSongs(songs: Song[]): SongGroup[] {
-  const order: string[] = [];
-  const byKey = new Map<string, Song[]>();
-  for (const song of songs) {
-    const key = song.groupId ?? song.id;
-    if (!byKey.has(key)) order.push(key);
-    byKey.set(key, [...(byKey.get(key) ?? []), song]);
-  }
-  return order.map((key) => {
-    const pages = [...(byKey.get(key) ?? [])].sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0));
-    const first = pages[0];
-    return { key, title: first.title, originalKey: first.originalKey, pageCount: pages.length };
-  });
 }
 
 /**
