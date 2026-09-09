@@ -13,7 +13,8 @@ import { detectOriginalKey } from "../../transpose";
 import type { Song } from "../../../types/song";
 
 interface ScanScreenProps {
-  onSongsScanned: (songs: Song[]) => void;
+  /** May persist the scanned songs (e.g. to the library) before resolving — always await/catch it here so a failure surfaces instead of leaving the screen stuck. */
+  onSongsScanned: (songs: Song[]) => void | Promise<void>;
 }
 
 interface PendingFile {
@@ -141,7 +142,7 @@ export function ScanScreen({ onSongsScanned }: ScanScreenProps) {
         alertCompat("인식 실패", "이미지에서 텍스트를 찾지 못했습니다. 더 선명한 이미지로 다시 시도해주세요.");
         return;
       }
-      onSongsScanned(songs);
+      await onSongsScanned(songs);
     } catch (error) {
       alertCompat("스캔 실패", error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
     } finally {
