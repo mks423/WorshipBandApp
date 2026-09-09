@@ -2,6 +2,8 @@ import { forwardRef, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
+import type { PdfPage, PdfPageRendererHandle } from "./types";
+
 const PDFJS_VERSION = "6.3.289";
 
 /**
@@ -41,8 +43,7 @@ async function renderPages(base64) {
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    const context = canvas.getContext("2d");
-    await page.render({ canvasContext: context, viewport }).promise;
+    await page.render({ canvas, viewport }).promise;
     pages.push({
       base64: canvas.toDataURL("image/png").split(",")[1],
       width: viewport.width,
@@ -71,17 +72,6 @@ window.addEventListener("message", handleMessage);
 </script>
 </body>
 </html>`;
-
-export interface PdfPage {
-  base64: string;
-  width: number;
-  height: number;
-}
-
-export interface PdfPageRendererHandle {
-  /** Rasterizes every page of a base64-encoded PDF, resolving to one entry per page. */
-  renderPages: (base64Pdf: string) => Promise<PdfPage[]>;
-}
 
 interface PendingRequest {
   resolve: (pages: PdfPage[]) => void;

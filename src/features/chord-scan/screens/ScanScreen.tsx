@@ -2,11 +2,12 @@ import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { useRef, useState } from "react";
-import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { buildSongsFromPages } from "../buildSongFromOcr";
 import { getGoogleVisionApiKey, recognizeTextWithGoogleVision } from "../ocrProviders";
-import { PdfPageRenderer, type PdfPageRendererHandle } from "../pdf/PdfPageRenderer";
+import { PdfPageRenderer } from "../pdf/PdfPageRenderer";
+import type { PdfPageRendererHandle } from "../pdf/types";
 import { alertCompat } from "../../../utils/alertCompat";
 import { detectOriginalKey } from "../../transpose";
 import type { Song } from "../../../types/song";
@@ -72,10 +73,6 @@ export function ScanScreen({ onSongsScanned }: ScanScreenProps) {
       for (const asset of result.assets) {
         const isPdf = asset.mimeType === "application/pdf" || /\.pdf$/i.test(asset.name);
         if (isPdf) {
-          if (Platform.OS === "web") {
-            alertCompat("웹에서는 지원되지 않음", `${asset.name}: PDF 가져오기는 모바일 앱(Expo Go)에서만 지원됩니다.`);
-            continue;
-          }
           newFiles.push(...(await rasterizePdf(asset, pdfRendererRef.current)));
         } else {
           const base64 = await readAsBase64(asset);
