@@ -48,6 +48,16 @@ export interface Section {
   lines: Line[];
 }
 
+/** A Verse/Chorus/Bridge-style tag placed at a point on the source image, marking where that part of the chart starts. */
+export interface SectionMarker {
+  id: string;
+  /** e.g. "Verse 1", "Chorus", "Bridge" — picked from a preset list or typed in by hand. */
+  label: string;
+  /** Position on the source image (pixel coordinates in `Song.sourceImage`'s space) where this section starts. */
+  x: number;
+  y: number;
+}
+
 export interface Song {
   id: string;
   title: string;
@@ -55,7 +65,13 @@ export interface Song {
   originalKey: string | null;
   /** Semitone offset currently applied relative to originalKey (0 = original key). */
   transposeSteps: number;
+  /** Tempo in beats per minute, for set-time planning and (eventually) playback. Null if unknown/unset. */
+  bpm: number | null;
+  /** Freeform notes for this song — a sermon theme, talking points, anything worth remembering alongside the chart. */
+  notes: string;
   sections: Section[];
+  /** Verse/Chorus/Bridge-style tags placed on the source image, independent of the OCR'd `sections` grouping. */
+  sectionMarkers: SectionMarker[];
   /** The scanned image this song was built from, if any, for the "view on original" overlay screen. */
   sourceImage?: { uri: string; width: number; height: number };
   /** Id shared by every page of the same imported document (e.g. a multi-page PDF), so the library can show them as one entry and reopen them together. Undefined for a single-page scan or a hand-entered song. */
@@ -94,6 +110,9 @@ export function createEmptySong(title: string): Song {
     title,
     originalKey: null,
     transposeSteps: 0,
+    bpm: null,
+    notes: "",
     sections: [],
+    sectionMarkers: [],
   };
 }

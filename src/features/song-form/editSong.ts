@@ -1,4 +1,14 @@
-import { createLine, createSection, createSegment, type Line, type Section, type Segment, type Song } from "../../types/song";
+import {
+  createId,
+  createLine,
+  createSection,
+  createSegment,
+  type Line,
+  type Section,
+  type Segment,
+  type SectionMarker,
+  type Song,
+} from "../../types/song";
 
 /** Identifies a single segment within a song, for edit operations below. */
 export interface SegmentLocation {
@@ -71,4 +81,26 @@ export function addChord(song: Song, position: NonNullable<Segment["chordPositio
       i === lastIndex ? { ...section, lines: [...section.lines, newLine] } : section
     ),
   };
+}
+
+/** Places a new Verse/Chorus/Bridge-style label at a point on the source image. */
+export function addSectionMarker(song: Song, position: { x: number; y: number }, label: string): Song {
+  const marker: SectionMarker = { id: createId("marker"), label, x: position.x, y: position.y };
+  return { ...song, sectionMarkers: [...song.sectionMarkers, marker] };
+}
+
+/** Edits an existing section marker's label and/or position. */
+export function updateSectionMarker(
+  song: Song,
+  markerId: string,
+  changes: Partial<Pick<SectionMarker, "label" | "x" | "y">>
+): Song {
+  return {
+    ...song,
+    sectionMarkers: song.sectionMarkers.map((marker) => (marker.id === markerId ? { ...marker, ...changes } : marker)),
+  };
+}
+
+export function removeSectionMarker(song: Song, markerId: string): Song {
+  return { ...song, sectionMarkers: song.sectionMarkers.filter((marker) => marker.id !== markerId) };
 }

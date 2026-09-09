@@ -7,6 +7,7 @@ import { alertCompat } from "../../../utils/alertCompat";
 import { exportPageAsImage, exportPageAsPdf } from "../exportSong";
 import { ExportModal } from "./ExportModal";
 import { KeyChangeModal } from "./KeyChangeModal";
+import { NotesModal } from "./NotesModal";
 import { SourceOverlayScreen } from "./SourceOverlayScreen";
 
 interface SongEditorScreenProps {
@@ -33,6 +34,7 @@ export function SongEditorScreen({
   onNavigatePage,
 }: SongEditorScreenProps) {
   const [keyModalVisible, setKeyModalVisible] = useState(false);
+  const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [exporting, setExporting] = useState(false);
   const overlayRef = useRef<View>(null);
@@ -70,6 +72,24 @@ export function SongEditorScreen({
               현재 키: {transposeChord(song.originalKey, song.transposeSteps)}
             </Text>
           )}
+          <View style={styles.bpmRow}>
+            <Text style={styles.keyInfoText}>BPM</Text>
+            <TextInput
+              style={styles.bpmInput}
+              value={song.bpm !== null ? String(song.bpm) : ""}
+              onChangeText={(text) => {
+                const digits = text.replace(/[^0-9]/g, "");
+                onSongChange({ ...song, bpm: digits.length > 0 ? Number(digits) : null });
+              }}
+              placeholder="-"
+              keyboardType="number-pad"
+            />
+          </View>
+          <Pressable onPress={() => setNotesModalVisible(true)}>
+            <Text style={[styles.keyInfoText, styles.notesLink]}>
+              {song.notes.trim().length > 0 ? "메모 있음" : "+ 메모"}
+            </Text>
+          </Pressable>
         </View>
       </View>
 
@@ -125,6 +145,13 @@ export function SongEditorScreen({
         onExportPdf={() => handleExport("pdf")}
         onClose={() => setExportModalVisible(false)}
       />
+
+      <NotesModal
+        visible={notesModalVisible}
+        song={song}
+        onSongChange={onSongChange}
+        onClose={() => setNotesModalVisible(false)}
+      />
     </View>
   );
 }
@@ -148,12 +175,30 @@ const styles = StyleSheet.create({
   },
   keyInfoRow: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 16,
   },
   keyInfoText: {
     fontSize: 14,
     color: "#555",
     fontWeight: "600",
+  },
+  bpmRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  bpmInput: {
+    minWidth: 36,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#555",
+    borderBottomWidth: 1,
+    borderBottomColor: "#ddd",
+    paddingVertical: 2,
+  },
+  notesLink: {
+    color: "#2f6feb",
   },
   pageNavRow: {
     flexDirection: "row",

@@ -16,13 +16,23 @@ function getSourcesDir(): Directory {
   return _sourcesDir;
 }
 
+/** Fills in defaults for fields added to the Song model after some songs were already saved, so old library entries don't come back with `undefined` where code now expects e.g. an array or a string. */
+function withDefaults(song: Song): Song {
+  return {
+    ...song,
+    bpm: song.bpm ?? null,
+    notes: song.notes ?? "",
+    sectionMarkers: song.sectionMarkers ?? [],
+  };
+}
+
 /** Reads the whole saved library. Never throws — a corrupt/missing entry just comes back as an empty library. */
 export async function loadLibrary(): Promise<Song[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Song[]) : [];
+    return Array.isArray(parsed) ? (parsed as Song[]).map(withDefaults) : [];
   } catch {
     return [];
   }

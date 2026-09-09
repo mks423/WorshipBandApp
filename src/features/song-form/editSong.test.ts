@@ -1,5 +1,5 @@
 import { createEmptySong, createLine, createSection, createSegment } from "../../types/song";
-import { addChord, moveChord, updateSegment } from "./editSong";
+import { addChord, addSectionMarker, moveChord, removeSectionMarker, updateSectionMarker, updateSegment } from "./editSong";
 
 function makeSong() {
   const segment1 = createSegment({ chord: "G", lyric: "Amazing ", chordPosition: { x: 10, y: 20, width: 15, height: 12 } });
@@ -82,5 +82,41 @@ describe("addChord", () => {
 
     expect(updated.sections).toHaveLength(1);
     expect(updated.sections[0].lines[0].segments[0].chord).toBe("A");
+  });
+});
+
+describe("addSectionMarker / updateSectionMarker / removeSectionMarker", () => {
+  it("adds a marker at the given position with the given label", () => {
+    const song = createEmptySong("Blank");
+
+    const updated = addSectionMarker(song, { x: 40, y: 200 }, "Chorus");
+
+    expect(updated.sectionMarkers).toHaveLength(1);
+    expect(updated.sectionMarkers[0]).toMatchObject({ label: "Chorus", x: 40, y: 200 });
+  });
+
+  it("does not mutate the original song when adding", () => {
+    const song = createEmptySong("Blank");
+    addSectionMarker(song, { x: 0, y: 0 }, "Chorus");
+    expect(song.sectionMarkers).toHaveLength(0);
+  });
+
+  it("updates just the targeted marker's label and position", () => {
+    const song = addSectionMarker(createEmptySong("Blank"), { x: 0, y: 0 }, "Chorus");
+    const markerId = song.sectionMarkers[0].id;
+
+    const updated = updateSectionMarker(song, markerId, { label: "Bridge", x: 10, y: 20 });
+
+    expect(updated.sectionMarkers[0]).toMatchObject({ label: "Bridge", x: 10, y: 20 });
+  });
+
+  it("removes the targeted marker only", () => {
+    let song = addSectionMarker(createEmptySong("Blank"), { x: 0, y: 0 }, "Verse 1");
+    song = addSectionMarker(song, { x: 0, y: 100 }, "Chorus");
+    const [keep, remove] = song.sectionMarkers;
+
+    const updated = removeSectionMarker(song, remove.id);
+
+    expect(updated.sectionMarkers).toEqual([keep]);
   });
 });
