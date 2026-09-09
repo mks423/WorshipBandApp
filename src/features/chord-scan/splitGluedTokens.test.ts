@@ -32,4 +32,15 @@ describe("splitGluedTokensOnLine", () => {
 
     expect(result.tokens).toEqual(line.tokens);
   });
+
+  it("expands a four-way over-merge into four positioned tokens (real case: '그 패턴' intro)", () => {
+    const line = { y: 10, tokens: [token("C#m7AEF#m7", 100, 100)] };
+
+    const result = splitGluedTokensOnLine(line);
+
+    expect(result.tokens.map((t) => t.text)).toEqual(["C#m7", "A", "E", "F#m7"]);
+    // 10 chars total across width 100 -> 10px per char, laid out left to right
+    // from the original merged box's x instead of all four sharing one spot.
+    expect(result.tokens.map((t) => t.x)).toEqual([100, 140, 150, 160]);
+  });
 });

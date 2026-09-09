@@ -157,23 +157,38 @@ export function repairMisreadChord(text: string): string {
 }
 
 /**
- * Attempts to split one OCR token that reads as two chords glued together
- * with no visual gap (common when a chart packs multiple chords tightly on
- * one beat, e.g. "Am7G/B" or "C#m7C") into its separate chord symbols.
+ * Attempts to split one OCR token that reads as two or more chords glued
+ * together with no visual gap into its separate chord symbols — common when
+ * a chart packs several chords tightly on one beat ("Am7G/B") or, on a dense
+ * line with many short chords in a row, when the gap-based token merge (see
+ * mergeAdjacentTokens.ts) overshoots and welds multiple genuinely separate
+ * chords into one ("C#m7AEF#m7" from what should have stayed "C#m7", "A",
+ * "E", "F#m7"). No fixed gap-to-height ratio can perfectly tell "one symbol
+ * split by OCR" from "several short chords sitting close together" apart —
+ * they can look geometrically identical — so this recovers from either
+ * direction by checking the *result* instead: does the token fully
+ * decompose into a run of valid chords?
  *
- * Only ever splits into pieces that are *each* independently a valid chord,
- * so it can't corrupt an ordinary lyric word: an English word essentially
- * never has a prefix and suffix that both parse as chord grammar (both
- * halves would need to start with a bare note letter A-G).
+ * Greedily takes the longest valid-chord prefix at each step (so "C#m7..."
+ * isn't cut short as just "C"), then recurses on the remainder. Only
+ * returns a split when the *entire* token decomposes into valid chords with
+ * nothing left over — a partial guess would be worse than leaving it alone
+ * for the user to fix — so it can't corrupt an ordinary lyric word: an
+ * English word essentially never decomposes entirely into chord-grammar
+ * pieces (every piece would need to start with a bare note letter A-G).
  */
 export function splitGluedChordToken(text: string): string[] {
   if (isChordToken(text)) return [text];
-  for (let i = 1; i < text.length; i++) {
-    const left = text.slice(0, i);
-    const right = text.slice(i);
-    if (isChordToken(left) && isChordToken(right)) {
-      return [left, right];
-    }
+  return decomposeIntoChords(text) ?? [text];
+}
+
+function decomposeIntoChords(text: string): string[] | null {
+  if (text.length === 0) return [];
+  for (let end = text.length; end >= 1; end--) {
+    const prefix = text.slice(0, end);
+    if (!isChordToken(prefix)) continue;
+    const rest = decomposeIntoChords(text.slice(end));
+    if (rest !== null) return [prefix, ...rest];
   }
-  return [text];
+  return null;
 }

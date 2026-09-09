@@ -128,6 +128,16 @@ describe("splitGluedChordToken", () => {
     expect(splitGluedChordToken("Amazing")).toEqual(["Amazing"]);
     expect(splitGluedChordToken("Amen")).toEqual(["Amen"]);
   });
+
+  it("decomposes four chords over-merged into one token on a dense chord line (real case: '그 패턴' intro)", () => {
+    expect(splitGluedChordToken("C#m7AEF#m7")).toEqual(["C#m7", "A", "E", "F#m7"]);
+  });
+
+  it("leaves a token unchanged if it doesn't fully decompose into all-valid chords", () => {
+    // "C#m7AX" -> "C#m7" then "AX" isn't a chord and doesn't decompose further,
+    // so there's no complete reading — leave it for the user rather than guess.
+    expect(splitGluedChordToken("C#m7AX")).toEqual(["C#m7AX"]);
+  });
 });
 
 describe("repairMisreadChord", () => {
