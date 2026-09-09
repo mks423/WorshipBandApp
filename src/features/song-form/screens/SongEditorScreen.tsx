@@ -1,20 +1,12 @@
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import {
-  addLine,
-  addSection,
-  mergeSegmentWithNext,
-  removeLine,
-  removeSection,
-  removeSegment,
-  renameSection,
-  splitSegment,
-  updateSegment,
-  type SegmentLocation,
-} from "../editSong";
-import { transposeChord, transposeSong } from "../../transpose";
-import type { Line, Section, Segment, Song } from "../../../types/song";
+import { transposeChord } from "../../transpose";
+import type { Song } from "../../../types/song";
+import { alertCompat } from "../../../utils/alertCompat";
+import { exportPageAsImage, exportPageAsPdf } from "../exportSong";
+import { ExportModal } from "./ExportModal";
+import { KeyChangeModal } from "./KeyChangeModal";
 import { SourceOverlayScreen } from "./SourceOverlayScreen";
 
 interface SongEditorScreenProps {
@@ -23,188 +15,116 @@ interface SongEditorScreenProps {
   onDone: () => void;
   /** Label for the bottom-bar "done" button — differs by how this screen was reached (e.g. "목록으로" from a multi-song batch, "다시 스캔하기" otherwise). */
   doneLabel?: string;
+  /** This song's position within a multi-page scan batch (0-based), for the page-flip row. Omit for a single scanned song. */
+  pageIndex?: number;
+  /** Total pages in the current batch. The page-flip row only shows when this is greater than 1. */
+  pageCount?: number;
+  /** Moves to the previous (-1) or next (+1) page within the batch, clamped at the ends. */
+  onNavigatePage?: (delta: number) => void;
 }
 
-export function SongEditorScreen({ song, onSongChange, onDone, doneLabel = "다시 스캔하기" }: SongEditorScreenProps) {
-  const [viewMode, setViewMode] = useState<"edit" | "original">("edit");
+export function SongEditorScreen({
+  song,
+  onSongChange,
+  onDone,
+  doneLabel = "다시 스캔하기",
+  pageIndex,
+  pageCount,
+  onNavigatePage,
+}: SongEditorScreenProps) {
+  const [keyModalVisible, setKeyModalVisible] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const overlayRef = useRef<View>(null);
+  const showPageNav = pageCount !== undefined && pageCount > 1 && pageIndex !== undefined;
+
+  async function handleExport(kind: "image" | "pdf") {
+    setExporting(true);
+    try {
+      if (kind === "image") {
+        await exportPageAsImage(overlayRef, song.title);
+      } else {
+        await exportPageAsPdf(overlayRef, song.title);
+      }
+      setExportModalVisible(false);
+    } catch (error) {
+      alertCompat("내보내기 실패", error instanceof Error ? error.message : String(error));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <View style={styles.container}>
-      {viewMode === "edit" ? (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <TextInput
-            style={styles.titleInput}
-            value={song.title}
-            onChangeText={(title) => onSongChange({ ...song, title })}
-            placeholder="곡 제목"
-          />
-
-          <View style={styles.keyInfoRow}>
-            <Text style={styles.keyInfoText}>인식된 키: {song.originalKey ?? "알 수 없음"}</Text>
-            {song.originalKey && (
-              <Text style={styles.keyInfoText}>
-                현재 키: {transposeChord(song.originalKey, song.transposeSteps)}
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.transposeRow}>
-            <Pressable style={styles.transposeButton} onPress={() => onSongChange(transposeSong(song, -1))}>
-              <Text style={styles.transposeButtonText}>- 반음</Text>
-            </Pressable>
-            <Text style={styles.transposeLabel}>
-              원key 대비 {song.transposeSteps >= 0 ? "+" : ""}
-              {song.transposeSteps}
+      <View style={styles.header}>
+        <TextInput
+          style={styles.titleInput}
+          value={song.title}
+          onChangeText={(title) => onSongChange({ ...song, title })}
+          placeholder="곡 제목"
+        />
+        <View style={styles.keyInfoRow}>
+          <Text style={styles.keyInfoText}>인식된 키: {song.originalKey ?? "알 수 없음"}</Text>
+          {song.originalKey && (
+            <Text style={styles.keyInfoText}>
+              현재 키: {transposeChord(song.originalKey, song.transposeSteps)}
             </Text>
-            <Pressable style={styles.transposeButton} onPress={() => onSongChange(transposeSong(song, 1))}>
-              <Text style={styles.transposeButtonText}>+ 반음</Text>
-            </Pressable>
-          </View>
+          )}
+        </View>
+      </View>
 
-          {song.sections.map((section) => (
-            <SectionEditor
-              key={section.id}
-              song={song}
-              section={section}
-              onSongChange={onSongChange}
-            />
-          ))}
+      <SourceOverlayScreen song={song} onSongChange={onSongChange} viewShotRef={overlayRef} />
 
+      {showPageNav && (
+        <View style={styles.pageNavRow}>
           <Pressable
-            style={styles.addSectionButton}
-            onPress={() => onSongChange(addSection(song, "새 섹션"))}
+            style={[styles.pageNavButton, pageIndex === 0 && styles.pageNavButtonDisabled]}
+            disabled={pageIndex === 0}
+            onPress={() => onNavigatePage?.(-1)}
           >
-            <Text style={styles.addSectionButtonText}>+ 섹션 추가</Text>
+            <Text style={styles.pageNavButtonText}>◀ 이전 페이지</Text>
           </Pressable>
-        </ScrollView>
-      ) : (
-        <SourceOverlayScreen song={song} />
+          <Text style={styles.pageIndicator}>
+            {pageIndex! + 1} / {pageCount}
+          </Text>
+          <Pressable
+            style={[styles.pageNavButton, pageIndex === pageCount! - 1 && styles.pageNavButtonDisabled]}
+            disabled={pageIndex === pageCount! - 1}
+            onPress={() => onNavigatePage?.(1)}
+          >
+            <Text style={styles.pageNavButtonText}>다음 페이지 ▶</Text>
+          </Pressable>
+        </View>
       )}
 
       <View style={styles.bottomBar}>
+        <Pressable style={styles.bottomButton} onPress={() => setKeyModalVisible(true)}>
+          <Text style={styles.bottomButtonText}>편집</Text>
+        </Pressable>
         {song.sourceImage && (
-          <Pressable
-            style={styles.bottomButton}
-            onPress={() => setViewMode(viewMode === "edit" ? "original" : "edit")}
-          >
-            <Text style={styles.bottomButtonText}>{viewMode === "edit" ? "원본 보기" : "편집 화면"}</Text>
+          <Pressable style={styles.bottomButton} onPress={() => setExportModalVisible(true)}>
+            <Text style={styles.bottomButtonText}>내보내기</Text>
           </Pressable>
         )}
         <Pressable style={styles.bottomButton} onPress={onDone}>
           <Text style={styles.bottomButtonText}>{doneLabel}</Text>
         </Pressable>
       </View>
-    </View>
-  );
-}
 
-function SectionEditor({
-  song,
-  section,
-  onSongChange,
-}: {
-  song: Song;
-  section: Section;
-  onSongChange: (song: Song) => void;
-}) {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <TextInput
-          style={styles.sectionNameInput}
-          value={section.name}
-          onChangeText={(name) => onSongChange(renameSection(song, section.id, name))}
-        />
-        <Pressable onPress={() => onSongChange(removeSection(song, section.id))}>
-          <Text style={styles.removeText}>섹션 삭제</Text>
-        </Pressable>
-      </View>
-
-      {section.lines.map((line) => (
-        <LineEditor key={line.id} song={song} sectionId={section.id} line={line} onSongChange={onSongChange} />
-      ))}
-
-      <Pressable style={styles.addLineButton} onPress={() => onSongChange(addLine(song, section.id))}>
-        <Text style={styles.addLineButtonText}>+ 줄 추가</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function LineEditor({
-  song,
-  sectionId,
-  line,
-  onSongChange,
-}: {
-  song: Song;
-  sectionId: string;
-  line: Line;
-  onSongChange: (song: Song) => void;
-}) {
-  return (
-    <View style={styles.line}>
-      <View style={styles.segmentRow}>
-        {line.segments.map((segment) => (
-          <SegmentEditor
-            key={segment.id}
-            song={song}
-            location={{ sectionId, lineId: line.id, segmentId: segment.id }}
-            segment={segment}
-            canMerge={line.segments.indexOf(segment) < line.segments.length - 1}
-            onSongChange={onSongChange}
-          />
-        ))}
-      </View>
-      <Pressable onPress={() => onSongChange(removeLine(song, sectionId, line.id))}>
-        <Text style={styles.removeText}>줄 삭제</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function SegmentEditor({
-  song,
-  location,
-  segment,
-  canMerge,
-  onSongChange,
-}: {
-  song: Song;
-  location: SegmentLocation;
-  segment: Segment;
-  canMerge: boolean;
-  onSongChange: (song: Song) => void;
-}) {
-  const lowConfidence = segment.confidence !== undefined && segment.confidence < 0.8;
-
-  return (
-    <View style={[styles.segment, lowConfidence && styles.segmentLowConfidence]}>
-      <TextInput
-        style={styles.chordInput}
-        value={segment.chord ?? ""}
-        placeholder="코드"
-        onChangeText={(text) => onSongChange(updateSegment(song, location, { chord: text.length > 0 ? text : null }))}
+      <KeyChangeModal
+        visible={keyModalVisible}
+        song={song}
+        onSongChange={onSongChange}
+        onClose={() => setKeyModalVisible(false)}
       />
-      <TextInput
-        style={styles.lyricInput}
-        value={segment.lyric}
-        placeholder="가사"
-        onChangeText={(lyric) => onSongChange(updateSegment(song, location, { lyric }))}
+
+      <ExportModal
+        visible={exportModalVisible}
+        exporting={exporting}
+        onExportImage={() => handleExport("image")}
+        onExportPdf={() => handleExport("pdf")}
+        onClose={() => setExportModalVisible(false)}
       />
-      <View style={styles.segmentActions}>
-        <Pressable onPress={() => onSongChange(splitSegment(song, location, Math.ceil(segment.lyric.length / 2)))}>
-          <Text style={styles.segmentActionText}>나누기</Text>
-        </Pressable>
-        {canMerge && (
-          <Pressable onPress={() => onSongChange(mergeSegmentWithNext(song, location))}>
-            <Text style={styles.segmentActionText}>합치기</Text>
-          </Pressable>
-        )}
-        <Pressable onPress={() => onSongChange(removeSegment(song, location))}>
-          <Text style={styles.segmentActionText}>삭제</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -213,9 +133,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
+  header: {
     padding: 16,
-    gap: 16,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
   },
   titleInput: {
     fontSize: 22,
@@ -233,105 +155,33 @@ const styles = StyleSheet.create({
     color: "#555",
     fontWeight: "600",
   },
-  transposeRow: {
+  pageNavRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#f5f5f5",
-    borderRadius: 10,
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+    backgroundColor: "#fafafa",
   },
-  transposeButton: {
+  pageNavButton: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: "#2f6feb",
     borderRadius: 8,
+    backgroundColor: "#2f6feb",
   },
-  transposeButtonText: {
+  pageNavButtonDisabled: {
+    backgroundColor: "#ccc",
+  },
+  pageNavButtonText: {
     color: "#fff",
     fontWeight: "700",
+    fontSize: 13,
   },
-  transposeLabel: {
-    fontWeight: "600",
-  },
-  section: {
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "#e2e2e2",
-    borderRadius: 10,
-    padding: 12,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionNameInput: {
-    fontSize: 17,
+  pageIndicator: {
     fontWeight: "700",
-    flex: 1,
-  },
-  line: {
-    gap: 4,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-    paddingTop: 8,
-  },
-  segmentRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  segment: {
-    minWidth: 90,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 6,
-    gap: 4,
-  },
-  segmentLowConfidence: {
-    borderColor: "#e0a800",
-    backgroundColor: "#fff9e6",
-  },
-  chordInput: {
-    fontWeight: "700",
-    color: "#2f6feb",
-    minWidth: 50,
-  },
-  lyricInput: {
-    minWidth: 70,
-  },
-  segmentActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  segmentActionText: {
-    fontSize: 11,
-    color: "#888",
-  },
-  removeText: {
-    fontSize: 12,
-    color: "#c0392b",
-  },
-  addLineButton: {
-    alignSelf: "flex-start",
-  },
-  addLineButtonText: {
-    color: "#2f6feb",
-    fontWeight: "600",
-  },
-  addSectionButton: {
-    alignItems: "center",
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#2f6feb",
-    borderRadius: 8,
-    borderStyle: "dashed",
-  },
-  addSectionButtonText: {
-    color: "#2f6feb",
-    fontWeight: "700",
+    color: "#333",
   },
   bottomBar: {
     flexDirection: "row",

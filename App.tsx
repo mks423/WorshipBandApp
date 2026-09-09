@@ -26,6 +26,16 @@ export default function App() {
     setEditingIndex(null);
   }
 
+  // Lets a multi-page scan (e.g. a 5-page PDF) be flipped through from
+  // inside the editor itself — no need to back out to the list between pages.
+  function navigatePage(delta: number) {
+    setEditingIndex((prev) => {
+      if (prev === null) return prev;
+      const next = prev + delta;
+      return next >= 0 && next < songs.length ? next : prev;
+    });
+  }
+
   let content;
   if (songs.length === 0) {
     content = <ScanScreen onSongsScanned={handleScanned} />;
@@ -38,6 +48,9 @@ export default function App() {
         onSongChange={(song) => updateSong(editingIndex, song)}
         onDone={() => (songs.length > 1 ? setEditingIndex(null) : backToScan())}
         doneLabel={songs.length > 1 ? "목록으로" : "다시 스캔하기"}
+        pageIndex={editingIndex}
+        pageCount={songs.length}
+        onNavigatePage={navigatePage}
       />
     );
   }

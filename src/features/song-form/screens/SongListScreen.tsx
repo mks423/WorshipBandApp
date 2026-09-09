@@ -10,8 +10,9 @@ interface SongListScreenProps {
 
 /**
  * Shown right after scanning multiple files/pages: one row per scanned
- * song, each already OCR'd and ready to edit — pressing "편집" goes
- * straight into that song's editor, with no extra confirmation step.
+ * song, each already OCR'd — pressing "선택" goes straight into that song's
+ * source-overlay view (chords redrawn on the original chart), with no
+ * extra confirmation step.
  */
 export function SongListScreen({ songs, onSelect, onRescan }: SongListScreenProps) {
   return (
@@ -30,7 +31,7 @@ export function SongListScreen({ songs, onSelect, onRescan }: SongListScreenProp
               <Text style={styles.rowKey}>인식된 키: {item.originalKey ?? "알 수 없음"}</Text>
             </View>
             <Pressable style={styles.editButton} onPress={() => onSelect(index)}>
-              <Text style={styles.editButtonText}>편집</Text>
+              <Text style={styles.editButtonText}>선택</Text>
             </Pressable>
           </View>
         )}
