@@ -1,6 +1,7 @@
 import { classifyLines } from "./classifyLines";
 import { groupTokensIntoLines } from "./groupIntoLines";
 import { mergeAdjacentTokens } from "./mergeAdjacentTokens";
+import { splitGluedTokensOnLine } from "./splitGluedTokens";
 import type { ClassifiedLine, OcrToken } from "./types";
 import {
   createEmptySong,
@@ -33,9 +34,9 @@ export function buildSongFromOcr(
 ): Song {
   const song = createEmptySong(title);
   if (sourceImage) song.sourceImage = sourceImage;
-  const classified = classifyLines(groupTokensIntoLines(tokens).map(mergeAdjacentTokens)).filter(
-    (line) => !isNoiseLine(line)
-  );
+  const classified = classifyLines(
+    groupTokensIntoLines(tokens).map(mergeAdjacentTokens).map(splitGluedTokensOnLine)
+  ).filter((line) => !isNoiseLine(line));
 
   let currentSection = createSection(DEFAULT_SECTION_NAME);
   song.sections.push(currentSection);
@@ -87,6 +88,24 @@ export function buildSongFromOcr(
   song.sections = nonEmptySections.length > 0 ? nonEmptySections : song.sections;
 
   return song;
+}
+
+/**
+ * Builds one independent Song per page of OCR tokens (e.g. one per picked
+ * photo, or one per page of a scanned PDF) — each page of sheet music is its
+ * own song to review and edit separately, not merged into one. Pages with no
+ * recognized text are skipped (e.g. a blank PDF page).
+ */
+export function buildSongsFromPages(
+  pages: Array<{
+    tokens: OcrToken[];
+    title: string;
+    sourceImage?: { uri: string; width: number; height: number };
+  }>
+): Song[] {
+  return pages
+    .filter((page) => page.tokens.length > 0)
+    .map((page) => buildSongFromOcr(page.tokens, page.title, page.sourceImage));
 }
 
 function joinTokens(line: ClassifiedLine): string {

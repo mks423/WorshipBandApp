@@ -13,7 +13,7 @@ import {
   updateSegment,
   type SegmentLocation,
 } from "../editSong";
-import { transposeSong } from "../../transpose";
+import { transposeChord, transposeSong } from "../../transpose";
 import type { Line, Section, Segment, Song } from "../../../types/song";
 import { SourceOverlayScreen } from "./SourceOverlayScreen";
 
@@ -21,9 +21,11 @@ interface SongEditorScreenProps {
   song: Song;
   onSongChange: (song: Song) => void;
   onDone: () => void;
+  /** Label for the bottom-bar "done" button — differs by how this screen was reached (e.g. "목록으로" from a multi-song batch, "다시 스캔하기" otherwise). */
+  doneLabel?: string;
 }
 
-export function SongEditorScreen({ song, onSongChange, onDone }: SongEditorScreenProps) {
+export function SongEditorScreen({ song, onSongChange, onDone, doneLabel = "다시 스캔하기" }: SongEditorScreenProps) {
   const [viewMode, setViewMode] = useState<"edit" | "original">("edit");
 
   return (
@@ -36,6 +38,15 @@ export function SongEditorScreen({ song, onSongChange, onDone }: SongEditorScree
             onChangeText={(title) => onSongChange({ ...song, title })}
             placeholder="곡 제목"
           />
+
+          <View style={styles.keyInfoRow}>
+            <Text style={styles.keyInfoText}>인식된 키: {song.originalKey ?? "알 수 없음"}</Text>
+            {song.originalKey && (
+              <Text style={styles.keyInfoText}>
+                현재 키: {transposeChord(song.originalKey, song.transposeSteps)}
+              </Text>
+            )}
+          </View>
 
           <View style={styles.transposeRow}>
             <Pressable style={styles.transposeButton} onPress={() => onSongChange(transposeSong(song, -1))}>
@@ -80,7 +91,7 @@ export function SongEditorScreen({ song, onSongChange, onDone }: SongEditorScree
           </Pressable>
         )}
         <Pressable style={styles.bottomButton} onPress={onDone}>
-          <Text style={styles.bottomButtonText}>다시 스캔하기</Text>
+          <Text style={styles.bottomButtonText}>{doneLabel}</Text>
         </Pressable>
       </View>
     </View>
@@ -212,6 +223,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#ddd",
     paddingVertical: 6,
+  },
+  keyInfoRow: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  keyInfoText: {
+    fontSize: 14,
+    color: "#555",
+    fontWeight: "600",
   },
   transposeRow: {
     flexDirection: "row",

@@ -1,3 +1,5 @@
+import type { Song } from "../../types/song";
+
 const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
@@ -24,6 +26,26 @@ function indexToNote(index: number, preferFlat: boolean): string {
 }
 
 const NOTE_START = /^([A-G])([#b]?)/;
+
+/**
+ * Best-guess original key for a freshly-scanned chart: the root note of its
+ * first chord. Worship charts overwhelmingly open on the tonic (the I
+ * chord), so this is a simple, usually-correct heuristic rather than real
+ * key detection — the user can always retype it if it's wrong for a
+ * particular chart.
+ */
+export function detectOriginalKey(song: Song): string | null {
+  for (const section of song.sections) {
+    for (const line of section.lines) {
+      for (const segment of line.segments) {
+        if (!segment.chord) continue;
+        const match = NOTE_START.exec(segment.chord);
+        if (match) return `${match[1]}${match[2]}`;
+      }
+    }
+  }
+  return null;
+}
 
 function transposeNote(note: string, semitones: number, preferFlat: boolean): string {
   const index = noteToIndex(note);

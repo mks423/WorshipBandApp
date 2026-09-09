@@ -1,4 +1,5 @@
-import { semitonesBetweenKeys, transposeChord } from "./chordTheory";
+import { detectOriginalKey, semitonesBetweenKeys, transposeChord } from "./chordTheory";
+import { createEmptySong, createLine, createSection, createSegment } from "../../types/song";
 
 describe("transposeChord", () => {
   it("transposes plain major chords up and down", () => {
@@ -44,5 +45,37 @@ describe("semitonesBetweenKeys", () => {
     expect(semitonesBetweenKeys("G", "C")).toBe(5);
     expect(semitonesBetweenKeys("C", "C")).toBe(0);
     expect(semitonesBetweenKeys("D", "C")).toBe(10);
+  });
+});
+
+describe("detectOriginalKey", () => {
+  it("guesses the key from the first chord in the song", () => {
+    const song = createEmptySong("Amazing Grace");
+    song.sections.push(
+      createSection("Verse 1", [
+        createLine([createSegment({ chord: "G", lyric: "Amazing " }), createSegment({ chord: "C", lyric: "grace" })]),
+      ])
+    );
+
+    expect(detectOriginalKey(song)).toBe("G");
+  });
+
+  it("skips leading chordless lyric lines to find the first real chord", () => {
+    const song = createEmptySong("Untitled");
+    song.sections.push(
+      createSection("Verse 1", [
+        createLine([createSegment({ chord: null, lyric: "no chord here" })]),
+        createLine([createSegment({ chord: "D/F#", lyric: "then a chord" })]),
+      ])
+    );
+
+    expect(detectOriginalKey(song)).toBe("D");
+  });
+
+  it("returns null when the song has no chords at all", () => {
+    const song = createEmptySong("Untitled");
+    song.sections.push(createSection("Verse 1", [createLine([createSegment({ chord: null, lyric: "lyrics only" })])]));
+
+    expect(detectOriginalKey(song)).toBeNull();
   });
 });

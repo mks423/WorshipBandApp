@@ -13,3 +13,4 @@ export {
 } from "./editSong";
 export { SongEditorScreen } from "./screens/SongEditorScreen";
 export { SourceOverlayScreen } from "./screens/SourceOverlayScreen";
+export { SongListScreen } from "./screens/SongListScreen";

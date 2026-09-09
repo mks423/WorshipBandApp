@@ -1,4 +1,4 @@
-import { buildSongFromOcr } from "./buildSongFromOcr";
+import { buildSongFromOcr, buildSongsFromPages } from "./buildSongFromOcr";
 import type { OcrToken } from "./types";
 
 function token(text: string, x: number, y: number, width = text.length * 8): OcrToken {
@@ -68,5 +68,45 @@ describe("buildSongFromOcr", () => {
     const segments = song.sections[0].lines[0].segments;
     expect(segments[0].chordPosition).toEqual({ x: 10, y: 40, width: 8, height: 20 });
     expect(segments[1].chordPosition).toEqual({ x: 90, y: 40, width: 8, height: 20 });
+  });
+});
+
+describe("buildSongsFromPages", () => {
+  it("builds one independent song per page, each keeping its own title and source image", () => {
+    const page1: OcrToken[] = [token("G", 10, 0), token("Amazing", 8, 40)];
+    const page2: OcrToken[] = [token("D", 10, 0), token("grace", 8, 40)];
+    const sourceImage1 = { uri: "file:///page1.png", width: 800, height: 600 };
+    const sourceImage2 = { uri: "file:///page2.png", width: 800, height: 600 };
+
+    const songs = buildSongsFromPages([
+      { tokens: page1, title: "곡 A (1/2)", sourceImage: sourceImage1 },
+      { tokens: page2, title: "곡 A (2/2)", sourceImage: sourceImage2 },
+    ]);
+
+    expect(songs).toHaveLength(2);
+    expect(songs[0].title).toBe("곡 A (1/2)");
+    expect(songs[0].sourceImage).toEqual(sourceImage1);
+    expect(songs[0].sections[0].lines[0].segments[0]).toMatchObject({ chord: "G", lyric: "Amazing" });
+    expect(songs[1].title).toBe("곡 A (2/2)");
+    expect(songs[1].sourceImage).toEqual(sourceImage2);
+    expect(songs[1].sections[0].lines[0].segments[0]).toMatchObject({ chord: "D", lyric: "grace" });
+  });
+
+  it("skips pages with no recognized text", () => {
+    const songs = buildSongsFromPages([
+      { tokens: [], title: "Blank page" },
+      { tokens: [token("G", 10, 0), token("Amazing", 8, 40)], title: "Amazing Grace" },
+    ]);
+
+    expect(songs).toHaveLength(1);
+    expect(songs[0].title).toBe("Amazing Grace");
+  });
+
+  it("returns an empty array when every page has no recognized text", () => {
+    const songs = buildSongsFromPages([
+      { tokens: [], title: "A" },
+      { tokens: [], title: "B" },
+    ]);
+    expect(songs).toEqual([]);
   });
 });

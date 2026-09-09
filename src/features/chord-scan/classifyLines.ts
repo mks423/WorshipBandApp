@@ -5,7 +5,7 @@ import type { ClassifiedLine, OcrLine } from "./types";
 export const CHORD_LINE_RATIO_THRESHOLD = 0.6;
 
 const SECTION_KEYWORDS =
-  /^(verse|chorus|bridge|intro|outro|pre-?chorus|interlude|tag|ending|refrain|hook|vamp)\s*\d*[:.]?$/i;
+  /^(verse|chorus|bridge|intro|outro|pre-?chorus|interlude|tag|ending|refrain|hook|vamp|섹션|벌스|후렴|브릿지|간주|다리|인트로|아웃트로|엔딩)\s*\d*[:.]?$/i;
 
 /**
  * Classifies each OCR-derived line as a chord line, a lyric line, a section

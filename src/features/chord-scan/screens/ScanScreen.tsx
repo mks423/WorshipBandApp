@@ -1,76 +1,115 @@
+import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { useRef, useState } from "react";
+import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { buildSongFromOcr } from "../buildSongFromOcr";
+import { buildSongsFromPages } from "../buildSongFromOcr";
 import { getGoogleVisionApiKey, recognizeTextWithGoogleVision } from "../ocrProviders";
+import { PdfPageRenderer, type PdfPageRendererHandle } from "../pdf/PdfPageRenderer";
+import { alertCompat } from "../../../utils/alertCompat";
+import { detectOriginalKey } from "../../transpose";
 import type { Song } from "../../../types/song";
 
 interface ScanScreenProps {
-  onSongScanned: (song: Song) => void;
+  onSongsScanned: (songs: Song[]) => void;
 }
 
-interface PickedImage {
+interface PendingFile {
+  id: string;
   uri: string;
   base64: string;
   width: number;
   height: number;
+  title: string;
 }
 
-export function ScanScreen({ onSongScanned }: ScanScreenProps) {
-  const [image, setImage] = useState<PickedImage | null>(null);
-  const [title, setTitle] = useState("");
+export function ScanScreen({ onSongsScanned }: ScanScreenProps) {
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-
-  async function pickFromLibrary() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("권한 필요", "악보 이미지를 불러오려면 사진 보관함 접근을 허용해주세요.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      base64: true,
-      quality: 0.7,
-    });
-    applyPickerResult(result);
-  }
+  const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
+  const pdfRendererRef = useRef<PdfPageRendererHandle>(null);
 
   async function pickFromCamera() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("권한 필요", "악보를 촬영하려면 카메라 접근을 허용해주세요.");
+      alertCompat("권한 필요", "악보를 촬영하려면 카메라 접근을 허용해주세요.");
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.7 });
-    applyPickerResult(result);
-  }
-
-  function applyPickerResult(result: ImagePicker.ImagePickerResult) {
+    const result = await ImagePicker.launchCameraAsync({ base64: true, quality: 1 });
     if (result.canceled) return;
     const asset = result.assets[0];
-    if (!asset.base64) {
-      Alert.alert("오류", "이미지를 읽어오지 못했습니다. 다시 시도해주세요.");
+    const base64 = asset.base64;
+    if (!base64) {
+      alertCompat("오류", "사진을 읽어오지 못했습니다. 다시 시도해주세요.");
       return;
     }
-    setImage({ uri: asset.uri, base64: asset.base64, width: asset.width, height: asset.height });
+    setPendingFiles((prev) => [
+      ...prev,
+      {
+        id: createLocalId(),
+        uri: asset.uri,
+        base64,
+        width: asset.width,
+        height: asset.height,
+        title: `사진 ${prev.length + 1}`,
+      },
+    ]);
+  }
+
+  async function pickFiles() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf"],
+      multiple: true,
+      base64: true,
+    });
+    if (result.canceled) return;
+
+    setIsImporting(true);
+    try {
+      const newFiles: PendingFile[] = [];
+      for (const asset of result.assets) {
+        const isPdf = asset.mimeType === "application/pdf" || /\.pdf$/i.test(asset.name);
+        if (isPdf) {
+          if (Platform.OS === "web") {
+            alertCompat("웹에서는 지원되지 않음", `${asset.name}: PDF 가져오기는 모바일 앱(Expo Go)에서만 지원됩니다.`);
+            continue;
+          }
+          newFiles.push(...(await rasterizePdf(asset, pdfRendererRef.current)));
+        } else {
+          const base64 = await readAsBase64(asset);
+          const { width, height } = await getImageSize(asset.uri);
+          newFiles.push({
+            id: createLocalId(),
+            uri: asset.uri,
+            base64,
+            width,
+            height,
+            title: stripExtension(asset.name),
+          });
+        }
+      }
+      if (newFiles.length > 0) {
+        setPendingFiles((prev) => [...prev, ...newFiles]);
+      }
+    } catch (error) {
+      alertCompat("파일을 불러오지 못했습니다", error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  function removeFile(id: string) {
+    setPendingFiles((prev) => prev.filter((file) => file.id !== id));
   }
 
   async function scan() {
-    if (!image) return;
+    if (pendingFiles.length === 0) return;
 
     const apiKey = getGoogleVisionApiKey();
     if (!apiKey) {
-      Alert.alert(
+      alertCompat(
         "설정 필요",
         "EXPO_PUBLIC_GOOGLE_VISION_API_KEY 환경변수가 설정되어 있지 않습니다. .env.example을 참고해 API 키를 설정해주세요."
       );
@@ -79,21 +118,33 @@ export function ScanScreen({ onSongScanned }: ScanScreenProps) {
 
     setIsScanning(true);
     try {
-      const tokens = await recognizeTextWithGoogleVision(image.base64, apiKey);
-      if (tokens.length === 0) {
-        Alert.alert("인식 실패", "이미지에서 텍스트를 찾지 못했습니다. 더 선명한 이미지로 다시 시도해주세요.");
+      const ocrPages = [];
+      for (let i = 0; i < pendingFiles.length; i++) {
+        setScanProgress({ done: i, total: pendingFiles.length });
+        const file = pendingFiles[i];
+        const tokens = await recognizeTextWithGoogleVision(file.base64, apiKey);
+        ocrPages.push({
+          tokens,
+          title: file.title.trim() || "제목 없는 곡",
+          sourceImage: { uri: file.uri, width: file.width, height: file.height },
+        });
+      }
+
+      const songs = buildSongsFromPages(ocrPages).map((song) => ({
+        ...song,
+        originalKey: detectOriginalKey(song),
+      }));
+
+      if (songs.length === 0) {
+        alertCompat("인식 실패", "이미지에서 텍스트를 찾지 못했습니다. 더 선명한 이미지로 다시 시도해주세요.");
         return;
       }
-      const song = buildSongFromOcr(tokens, title.trim() || "제목 없는 곡", {
-        uri: image.uri,
-        width: image.width,
-        height: image.height,
-      });
-      onSongScanned(song);
+      onSongsScanned(songs);
     } catch (error) {
-      Alert.alert("스캔 실패", error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
+      alertCompat("스캔 실패", error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
     } finally {
       setIsScanning(false);
+      setScanProgress(null);
     }
   }
 
@@ -101,43 +152,123 @@ export function ScanScreen({ onSongScanned }: ScanScreenProps) {
     <View style={styles.container}>
       <Text style={styles.heading}>악보 스캔</Text>
 
-      {image ? (
-        <Image source={{ uri: image.uri }} style={styles.preview} resizeMode="contain" />
+      {pendingFiles.length > 0 ? (
+        <Image source={{ uri: pendingFiles[0].uri }} style={styles.preview} resizeMode="contain" />
       ) : (
         <View style={[styles.preview, styles.previewPlaceholder]}>
-          <Text style={styles.placeholderText}>악보 이미지를 선택해주세요</Text>
+          <Text style={styles.placeholderText}>악보 이미지 또는 PDF를 선택해주세요</Text>
+        </View>
+      )}
+
+      {pendingFiles.length > 0 && (
+        <View style={styles.fileList}>
+          {pendingFiles.map((file, index) => (
+            <View key={file.id} style={styles.fileRow}>
+              <Text style={styles.fileRowText} numberOfLines={1}>
+                {index + 1}. {file.title}
+              </Text>
+              <Pressable onPress={() => removeFile(file.id)}>
+                <Text style={styles.fileRowRemove}>삭제</Text>
+              </Pressable>
+            </View>
+          ))}
         </View>
       )}
 
       <View style={styles.row}>
-        <Pressable style={styles.button} onPress={pickFromLibrary}>
-          <Text style={styles.buttonText}>사진 보관함에서 선택</Text>
-        </Pressable>
         <Pressable style={styles.button} onPress={pickFromCamera}>
           <Text style={styles.buttonText}>촬영</Text>
         </Pressable>
+        <Pressable style={styles.button} onPress={pickFiles} disabled={isImporting}>
+          {isImporting ? <ActivityIndicator /> : <Text style={styles.buttonText}>파일 가져오기 (사진/PDF)</Text>}
+        </Pressable>
       </View>
 
-      <TextInput
-        style={styles.titleInput}
-        placeholder="곡 제목"
-        value={title}
-        onChangeText={setTitle}
-      />
-
       <Pressable
-        style={[styles.scanButton, (!image || isScanning) && styles.scanButtonDisabled]}
+        style={[styles.scanButton, (pendingFiles.length === 0 || isScanning) && styles.scanButtonDisabled]}
         onPress={scan}
-        disabled={!image || isScanning}
+        disabled={pendingFiles.length === 0 || isScanning}
       >
         {isScanning ? (
-          <ActivityIndicator color="#fff" />
+          <Text style={styles.scanButtonText}>
+            {scanProgress ? `스캔 중... (${scanProgress.done + 1}/${scanProgress.total})` : "스캔 중..."}
+          </Text>
         ) : (
-          <Text style={styles.scanButtonText}>스캔하기</Text>
+          <Text style={styles.scanButtonText}>
+            {pendingFiles.length > 1 ? `${pendingFiles.length}장 스캔하기` : "스캔하기"}
+          </Text>
         )}
       </Pressable>
+
+      <PdfPageRenderer ref={pdfRendererRef} />
     </View>
   );
+}
+
+interface RasterizedPage {
+  id: string;
+  uri: string;
+  base64: string;
+  width: number;
+  height: number;
+  title: string;
+}
+
+async function rasterizePdf(
+  asset: DocumentPicker.DocumentPickerAsset,
+  renderer: PdfPageRendererHandle | null
+): Promise<RasterizedPage[]> {
+  const base64Pdf = await readAsBase64(asset);
+  const rendered = await renderer?.renderPages(base64Pdf);
+  if (!rendered || rendered.length === 0) {
+    alertCompat("오류", `${asset.name}에서 페이지를 읽지 못했습니다.`);
+    return [];
+  }
+  const baseName = stripExtension(asset.name);
+  return rendered.map((page, index) => ({
+    id: createLocalId(),
+    uri: `data:image/png;base64,${page.base64}`,
+    base64: page.base64,
+    width: page.width,
+    height: page.height,
+    title: rendered.length > 1 ? `${baseName} (${index + 1}/${rendered.length})` : baseName,
+  }));
+}
+
+async function readAsBase64(asset: DocumentPicker.DocumentPickerAsset): Promise<string> {
+  if (asset.base64) return stripDataUriPrefix(asset.base64);
+  const file = new File(asset.uri);
+  return stripDataUriPrefix(await file.base64());
+}
+
+/**
+ * expo-document-picker's web implementation reads files via
+ * FileReader.readAsDataURL, so asset.base64 on web comes back as a full data
+ * URI ("data:image/png;base64,xxxx"), not a bare base64 payload — sending
+ * that straight to Google Vision's `image.content` field gets rejected with
+ * a 400. Strips the prefix when present; a no-op on an already-bare string.
+ */
+function stripDataUriPrefix(base64: string): string {
+  const commaIndex = base64.indexOf(",");
+  return base64.startsWith("data:") && commaIndex !== -1 ? base64.slice(commaIndex + 1) : base64;
+}
+
+function getImageSize(uri: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    Image.getSize(
+      uri,
+      (width, height) => resolve({ width, height }),
+      (error) => reject(error instanceof Error ? error : new Error(String(error)))
+    );
+  });
+}
+
+function stripExtension(name: string): string {
+  return name.replace(/\.[^./]+$/, "");
+}
+
+function createLocalId(): string {
+  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 }
 
 const styles = StyleSheet.create({
@@ -163,6 +294,24 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: "#888",
   },
+  fileList: {
+    gap: 4,
+    marginTop: -8,
+  },
+  fileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  fileRowText: {
+    flex: 1,
+    color: "#333",
+  },
+  fileRowRemove: {
+    fontSize: 12,
+    color: "#c0392b",
+    marginLeft: 12,
+  },
   row: {
     flexDirection: "row",
     gap: 12,
@@ -176,13 +325,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontWeight: "600",
-  },
-  titleInput: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
   scanButton: {
     paddingVertical: 14,

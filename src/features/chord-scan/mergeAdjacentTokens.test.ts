@@ -47,4 +47,49 @@ describe("mergeAdjacentTokens", () => {
     const empty = { y: 0, tokens: [] };
     expect(mergeAdjacentTokens(empty).tokens).toHaveLength(0);
   });
+
+  it("glues a parenthesized suffix despite wider real-world gaps around the parens", () => {
+    // Exact bounding boxes Google Vision returned for "B(SUS4)" printed with
+    // zero visual space — the parenthesis glyphs' own side-bearing produces
+    // gaps (6px, 4px, 6px on ~21px-tall tokens) past the default merge
+    // threshold, even though nothing prints between these characters.
+    const line = {
+      y: 60,
+      tokens: [
+        token("B", 40, 16, 21, 54),
+        token("(", 62, 8, 21, 54),
+        token("SUS4", 74, 63, 21, 54),
+        token(")", 143, 9, 21, 54),
+      ],
+    };
+
+    const result = mergeAdjacentTokens(line);
+
+    expect(result.tokens.map((t) => t.text)).toEqual(["B(SUS4)"]);
+  });
+
+  it("glues an accidental with a wider real-world gap than the original tuning assumed", () => {
+    // Exact bounding boxes Google Vision returned for "C#m7" on a different
+    // chart/font than the one the original 0.15 threshold was tuned against:
+    // "C"-"#" gap is 4px on a 20px-tall token (0.2x height).
+    const line = {
+      y: 60,
+      tokens: [token("C", 224, 16, 20, 53), token("#", 244, 13, 20, 53), token("m7", 257, 33, 20, 53)],
+    };
+
+    const result = mergeAdjacentTokens(line);
+
+    expect(result.tokens.map((t) => t.text)).toEqual(["C#m7"]);
+  });
+
+  it("does not bridge a real word gap just because the previous token ends in ')'", () => {
+    const line = {
+      y: 60,
+      tokens: [token("B(SUS4)", 40, 113, 21, 54), token("DM7", 426, 49, 21, 55)],
+    };
+
+    const result = mergeAdjacentTokens(line);
+
+    expect(result.tokens.map((t) => t.text)).toEqual(["B(SUS4)", "DM7"]);
+  });
 });
