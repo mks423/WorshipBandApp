@@ -238,7 +238,7 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <View style={styles.container}>
       <View style={styles.toolbar}>
         <Text style={styles.hint}>
           {comparing
@@ -296,113 +296,116 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
           </View>
         </View>
       </View>
-      <View
-        ref={viewShotRef}
-        collapsable={false}
-        style={{ aspectRatio: sourceWidth / sourceHeight }}
-        onLayout={(e) => setDisplayWidth(e.nativeEvent.layout.width)}
-      >
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          disabled={(!addChordMode && !addSectionMode) || comparing}
-          onPress={handleImagePress}
+
+      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View
+          ref={viewShotRef}
+          collapsable={false}
+          style={{ aspectRatio: sourceWidth / sourceHeight }}
+          onLayout={(e) => setDisplayWidth(e.nativeEvent.layout.width)}
         >
-          {uri && <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />}
-        </Pressable>
-        {scale > 0 &&
-          !comparing &&
-          chordOverlays.map(({ segment, location }) => {
-            const fontSize = Math.max(11, segment.chordPosition.height * scale * 0.75) * textScale;
-            const position = {
-              left: segment.chordPosition.x * scale,
-              top: segment.chordPosition.y * scale,
-            };
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            disabled={(!addChordMode && !addSectionMode) || comparing}
+            onPress={handleImagePress}
+          >
+            {uri && <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />}
+          </Pressable>
+          {scale > 0 &&
+            !comparing &&
+            chordOverlays.map(({ segment, location }) => {
+              const fontSize = Math.max(11, segment.chordPosition.height * scale * 0.75) * textScale;
+              const position = {
+                left: segment.chordPosition.x * scale,
+                top: segment.chordPosition.y * scale,
+              };
 
-            if (editingSegmentId === segment.id) {
-              const inputWidth = Math.max(fontSize * 1.3, editingText.length * fontSize * 0.62 + fontSize * 0.6);
+              if (editingSegmentId === segment.id) {
+                const inputWidth = Math.max(fontSize * 1.3, editingText.length * fontSize * 0.62 + fontSize * 0.6);
+                return (
+                  <View key={segment.id} style={[styles.editingGroup, position]}>
+                    <TextInput
+                      style={[styles.chordInput, { fontSize, width: inputWidth }]}
+                      value={editingText}
+                      onChangeText={setEditingText}
+                      autoFocus
+                      selectTextOnFocus
+                      onSubmitEditing={() => requestEditConfirm(location, segment.chord)}
+                    />
+                    <Pressable
+                      style={styles.confirmButton}
+                      onPress={() => requestEditConfirm(location, segment.chord)}
+                      hitSlop={8}
+                    >
+                      <Text style={styles.confirmButtonSmallText}>✓</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.cancelButton}
+                      onPress={() => requestDeleteConfirm(location, segment.chord)}
+                      hitSlop={8}
+                    >
+                      <Text style={styles.cancelButtonText}>✕</Text>
+                    </Pressable>
+                  </View>
+                );
+              }
+
               return (
-                <View key={segment.id} style={[styles.editingGroup, position]}>
-                  <TextInput
-                    style={[styles.chordInput, { fontSize, width: inputWidth }]}
-                    value={editingText}
-                    onChangeText={setEditingText}
-                    autoFocus
-                    selectTextOnFocus
-                    onSubmitEditing={() => requestEditConfirm(location, segment.chord)}
-                  />
-                  <Pressable
-                    style={styles.confirmButton}
-                    onPress={() => requestEditConfirm(location, segment.chord)}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.confirmButtonSmallText}>✓</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.cancelButton}
-                    onPress={() => requestDeleteConfirm(location, segment.chord)}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.cancelButtonText}>✕</Text>
-                  </Pressable>
-                </View>
+                <ChordBadge
+                  key={segment.id}
+                  chord={segment.chord}
+                  position={position}
+                  fontSize={fontSize}
+                  scale={scale}
+                  onTap={() => {
+                    setEditingSegmentId(segment.id);
+                    setEditingText(segment.chord ?? "");
+                  }}
+                  onMove={(deltaSourceX, deltaSourceY) =>
+                    moveChordBadge(location, segment.chordPosition, deltaSourceX, deltaSourceY)
+                  }
+                />
               );
-            }
-
-            return (
-              <ChordBadge
-                key={segment.id}
-                chord={segment.chord}
-                position={position}
-                fontSize={fontSize}
+            })}
+          {scale > 0 &&
+            !comparing &&
+            newChordDraft &&
+            (() => {
+              const draftFontSize = Math.max(11, newChordDraft.height * scale * 0.75) * textScale;
+              const draftWidth = Math.max(
+                draftFontSize * 1.3,
+                newChordDraft.text.length * draftFontSize * 0.62 + draftFontSize * 0.6
+              );
+              return (
+                <TextInput
+                  style={[
+                    styles.chordInput,
+                    styles.newChordInput,
+                    { left: newChordDraft.x * scale, top: newChordDraft.y * scale, fontSize: draftFontSize, width: draftWidth },
+                  ]}
+                  value={newChordDraft.text}
+                  onChangeText={(text) => setNewChordDraft((prev) => (prev ? { ...prev, text } : prev))}
+                  placeholder="코드"
+                  autoFocus
+                  onBlur={commitNewChord}
+                  onSubmitEditing={commitNewChord}
+                />
+              );
+            })()}
+          {scale > 0 &&
+            !comparing &&
+            song.sectionMarkers.map((marker) => (
+              <SectionMarkerBadge
+                key={marker.id}
+                marker={marker}
+                position={{ left: marker.x * scale, top: marker.y * scale }}
                 scale={scale}
-                onTap={() => {
-                  setEditingSegmentId(segment.id);
-                  setEditingText(segment.chord ?? "");
-                }}
-                onMove={(deltaSourceX, deltaSourceY) =>
-                  moveChordBadge(location, segment.chordPosition, deltaSourceX, deltaSourceY)
-                }
+                onTap={() => setLabelModalState({ mode: "edit", markerId: marker.id, initialLabel: marker.label })}
+                onMove={(deltaSourceX, deltaSourceY) => moveSectionMarker(marker.id, marker, deltaSourceX, deltaSourceY)}
               />
-            );
-          })}
-        {scale > 0 &&
-          !comparing &&
-          newChordDraft &&
-          (() => {
-            const draftFontSize = Math.max(11, newChordDraft.height * scale * 0.75) * textScale;
-            const draftWidth = Math.max(
-              draftFontSize * 1.3,
-              newChordDraft.text.length * draftFontSize * 0.62 + draftFontSize * 0.6
-            );
-            return (
-              <TextInput
-                style={[
-                  styles.chordInput,
-                  styles.newChordInput,
-                  { left: newChordDraft.x * scale, top: newChordDraft.y * scale, fontSize: draftFontSize, width: draftWidth },
-                ]}
-                value={newChordDraft.text}
-                onChangeText={(text) => setNewChordDraft((prev) => (prev ? { ...prev, text } : prev))}
-                placeholder="코드"
-                autoFocus
-                onBlur={commitNewChord}
-                onSubmitEditing={commitNewChord}
-              />
-            );
-          })()}
-        {scale > 0 &&
-          !comparing &&
-          song.sectionMarkers.map((marker) => (
-            <SectionMarkerBadge
-              key={marker.id}
-              marker={marker}
-              position={{ left: marker.x * scale, top: marker.y * scale }}
-              scale={scale}
-              onTap={() => setLabelModalState({ mode: "edit", markerId: marker.id, initialLabel: marker.label })}
-              onMove={(deltaSourceX, deltaSourceY) => moveSectionMarker(marker.id, marker, deltaSourceX, deltaSourceY)}
-            />
-          ))}
-      </View>
+            ))}
+        </View>
+      </ScrollView>
 
       <SectionLabelModal
         visible={labelModalState !== null}
@@ -425,7 +428,7 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
         onConfirm={confirmPendingAction}
         onCancel={() => setPendingAction(null)}
       />
-    </ScrollView>
+    </View>
   );
 }
 
@@ -557,16 +560,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollArea: {
+    flex: 1,
+  },
   scrollContent: {
     padding: 16,
-    gap: 12,
   },
+  // Sits outside the ScrollView (see the component body) so it stays fixed
+  // in place while the chart scrolls underneath — the bottom border/background
+  // give it a visible edge instead of blending into whatever's behind it.
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     flexWrap: "wrap",
     gap: 8,
+    padding: 16,
+    paddingBottom: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
   },
   hint: {
     fontSize: 12,
