@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { removeSectionMarker, updateSectionMarker } from "../editSong";
 import { CHROMATIC_KEYS, semitonesBetweenKeys, transposeChord, transposeSong, transposeSongToKey } from "../../transpose";
 import type { Song } from "../../../types/song";
 
@@ -12,43 +13,66 @@ interface SongInfoModalProps {
 }
 
 /**
- * One place to edit everything about a song that isn't the chart itself:
- * title, BPM, the detected original key (a guess from the first chord —
- * see detectOriginalKey — so it needs to be correctable by hand when it
- * guessed wrong), and transposing to a different key.
+ * One place to edit everything about a song that isn't the chart content
+ * itself: title, BPM, the detected original key (a guess from the first
+ * chord — see detectOriginalKey — so it needs to be correctable by hand
+ * when it guessed wrong), transposing to a different key, and renaming or
+ * removing existing Verse/Chorus/Bridge-style section markers (placing a
+ * *new* one still happens by tapping the chart directly, since that needs
+ * a screen position this modal has no way to capture).
+ *
+ * Edits are staged locally and only committed to the real song on
+ * "업데이트" — "취소" (or the backdrop/back button) discards them — so
+ * changes here don't leak into the chart underneath until confirmed.
  *
  * Correcting the original key is a plain metadata fix, not a transpose: it
- * only relabels what key the chart was already written in, so it leaves
- * every chord and transposeSteps untouched. Transposing (the stepper/grid
- * below it) is the opposite — it rewrites every chord and leaves
- * originalKey alone as the fixed reference point.
+ * only relabels what key the chart was already written in, leaving every
+ * chord and transposeSteps untouched. Transposing (the stepper/grid below
+ * it) is the opposite — it rewrites every chord and leaves originalKey
+ * fixed as the reference point.
  */
 export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfoModalProps) {
+  const [draft, setDraft] = useState(song);
   const [correctingOriginalKey, setCorrectingOriginalKey] = useState(false);
-  const currentKey = song.originalKey ? transposeChord(song.originalKey, song.transposeSteps) : null;
+
+  // Re-sync the draft to the real song each time the modal opens, so a
+  // cancelled edit never carries over into the next time it's opened.
+  useEffect(() => {
+    if (visible) {
+      setDraft(song);
+      setCorrectingOriginalKey(false);
+    }
+  }, [visible, song]);
+
+  const currentKey = draft.originalKey ? transposeChord(draft.originalKey, draft.transposeSteps) : null;
+
+  function commit() {
+    onSongChange(draft);
+    onClose();
+  }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+        <View style={styles.card}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>곡 정보</Text>
 
             <Text style={styles.fieldLabel}>곡 제목</Text>
             <TextInput
               style={styles.textInput}
-              value={song.title}
-              onChangeText={(title) => onSongChange({ ...song, title })}
+              value={draft.title}
+              onChangeText={(title) => setDraft((prev) => ({ ...prev, title }))}
               placeholder="곡 제목"
             />
 
             <Text style={styles.fieldLabel}>BPM</Text>
             <TextInput
               style={styles.textInput}
-              value={song.bpm !== null ? String(song.bpm) : ""}
+              value={draft.bpm !== null ? String(draft.bpm) : ""}
               onChangeText={(text) => {
                 const digits = text.replace(/[^0-9]/g, "");
-                onSongChange({ ...song, bpm: digits.length > 0 ? Number(digits) : null });
+                setDraft((prev) => ({ ...prev, bpm: digits.length > 0 ? Number(digits) : null }));
               }}
               placeholder="-"
               keyboardType="number-pad"
@@ -58,11 +82,13 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
               <Text style={styles.fieldLabel}>인식된 키 (원key)</Text>
               <Pressable onPress={() => setCorrectingOriginalKey((prev) => !prev)}>
                 <Text style={styles.correctKeyLink}>
-                  {correctingOriginalKey ? "닫기" : song.originalKey ? "수정" : "직접 입력"}
+                  {correctingOriginalKey ? "닫기" : draft.originalKey ? "수정" : "직접 입력"}
                 </Text>
               </Pressable>
             </View>
-            <Text style={styles.subtitle}>원key {song.originalKey ?? "알 수 없음"} · 현재 키 {currentKey ?? "알 수 없음"}</Text>
+            <Text style={styles.subtitle}>
+              원key {draft.originalKey ?? "알 수 없음"} · 현재 키 {currentKey ?? "알 수 없음"}
+            </Text>
             {correctingOriginalKey && (
               <>
                 <Text style={styles.correctKeyHint}>
@@ -72,14 +98,14 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
                   {CHROMATIC_KEYS.map((key) => (
                     <Pressable
                       key={key}
-                      style={[styles.correctKeyButton, song.originalKey === key && styles.correctKeyButtonActive]}
+                      style={[styles.correctKeyButton, draft.originalKey === key && styles.correctKeyButtonActive]}
                       onPress={() => {
-                        onSongChange({ ...song, originalKey: key });
+                        setDraft((prev) => ({ ...prev, originalKey: key }));
                         setCorrectingOriginalKey(false);
                       }}
                     >
                       <Text
-                        style={[styles.keyButtonText, song.originalKey === key && styles.keyButtonTextActive]}
+                        style={[styles.keyButtonText, draft.originalKey === key && styles.keyButtonTextActive]}
                       >
                         {key}
                       </Text>
@@ -89,16 +115,16 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
               </>
             )}
 
-            <Text style={[styles.fieldLabel, styles.transposeSectionLabel]}>전조</Text>
+            <Text style={[styles.fieldLabel, styles.sectionDivider]}>전조</Text>
             <View style={styles.stepperRow}>
-              <Pressable style={styles.stepperButton} onPress={() => onSongChange(transposeSong(song, -1))}>
+              <Pressable style={styles.stepperButton} onPress={() => setDraft((prev) => transposeSong(prev, -1))}>
                 <Text style={styles.stepperButtonText}>- 반음</Text>
               </Pressable>
               <Text style={styles.stepperLabel}>
-                원key 대비 {song.transposeSteps >= 0 ? "+" : ""}
-                {song.transposeSteps}
+                원key 대비 {draft.transposeSteps >= 0 ? "+" : ""}
+                {draft.transposeSteps}
               </Text>
-              <Pressable style={styles.stepperButton} onPress={() => onSongChange(transposeSong(song, 1))}>
+              <Pressable style={styles.stepperButton} onPress={() => setDraft((prev) => transposeSong(prev, 1))}>
                 <Text style={styles.stepperButtonText}>+ 반음</Text>
               </Pressable>
             </View>
@@ -111,7 +137,7 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
                     <Pressable
                       key={key}
                       style={[styles.keyButton, active && styles.keyButtonActive]}
-                      onPress={() => onSongChange(transposeSongToKey(song, currentKey, key))}
+                      onPress={() => setDraft((prev) => transposeSongToKey(prev, currentKey, key))}
                     >
                       <Text style={[styles.keyButtonText, active && styles.keyButtonTextActive]}>{key}</Text>
                     </Pressable>
@@ -119,11 +145,37 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
                 })}
               </View>
             )}
+
+            <Text style={[styles.fieldLabel, styles.sectionDivider]}>섹션 라벨</Text>
+            {draft.sectionMarkers.length === 0 ? (
+              <Text style={styles.subtitle}>등록된 섹션 라벨이 없습니다. 악보를 탭해 "+ 섹션 라벨"로 추가하세요.</Text>
+            ) : (
+              draft.sectionMarkers.map((marker) => (
+                <View key={marker.id} style={styles.markerRow}>
+                  <TextInput
+                    style={[styles.textInput, styles.markerInput]}
+                    value={marker.label}
+                    onChangeText={(label) => setDraft((prev) => updateSectionMarker(prev, marker.id, { label }))}
+                  />
+                  <Pressable
+                    style={styles.markerDeleteButton}
+                    onPress={() => setDraft((prev) => removeSectionMarker(prev, marker.id))}
+                  >
+                    <Text style={styles.markerDeleteButtonText}>삭제</Text>
+                  </Pressable>
+                </View>
+              ))
+            )}
           </ScrollView>
 
-          <Pressable style={styles.doneButton} onPress={onClose}>
-            <Text style={styles.doneButtonText}>완료</Text>
-          </Pressable>
+          <View style={styles.buttonRow}>
+            <Pressable style={styles.cancelButton} onPress={onClose}>
+              <Text style={styles.cancelButtonText}>취소</Text>
+            </Pressable>
+            <Pressable style={styles.updateButton} onPress={commit}>
+              <Text style={styles.updateButtonText}>업데이트</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
@@ -133,14 +185,17 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    justifyContent: "flex-end",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.35)",
+    padding: 24,
   },
-  sheet: {
+  card: {
+    width: "100%",
+    maxWidth: 420,
     maxHeight: "85%",
     backgroundColor: "#fff",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderRadius: 14,
     padding: 20,
     gap: 12,
   },
@@ -156,7 +211,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 6,
   },
-  transposeSectionLabel: {
+  sectionDivider: {
     marginTop: 16,
     paddingTop: 12,
     borderTopWidth: 1,
@@ -258,14 +313,50 @@ const styles = StyleSheet.create({
   keyButtonTextActive: {
     color: "#fff",
   },
-  doneButton: {
+  markerRow: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    gap: 8,
+    marginBottom: 8,
+  },
+  markerInput: {
+    flex: 1,
+  },
+  markerDeleteButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#fdecea",
+  },
+  markerDeleteButtonText: {
+    fontWeight: "700",
+    color: "#c0392b",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 12,
     borderRadius: 8,
     backgroundColor: "#eee",
-    marginTop: 8,
   },
-  doneButtonText: {
+  cancelButtonText: {
     fontWeight: "700",
+    color: "#333",
+  },
+  updateButton: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#2f6feb",
+  },
+  updateButtonText: {
+    fontWeight: "700",
+    color: "#fff",
   },
 });
