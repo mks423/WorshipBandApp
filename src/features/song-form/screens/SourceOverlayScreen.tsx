@@ -67,6 +67,7 @@ const DEFAULT_CHORD_HEIGHT_RATIO = 0.025;
  * tapping the blank spot it belongs at.
  */
 export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceOverlayScreenProps) {
+  const hitAreaRef = useRef<View>(null);
   const [displayWidth, setDisplayWidth] = useState(0);
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -186,20 +187,34 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
     );
   }
 
+  // e.nativeEvent.locationX/Y is supposed to be the touch position relative
+  // to the target element, but react-native-web doesn't compute it reliably
+  // (it consistently reports ~0,0 regardless of where the tap actually
+  // landed) — a chord/section-label placed from a web tap always ended up
+  // pinned to the top-left corner of the chart instead of where the user
+  // tapped. pageX/pageY (the tap's position relative to the whole page) is
+  // reliable on both platforms, so this measures the hit area's own
+  // page position at tap time and subtracts it to recover the same "relative
+  // to the element" coordinate locationX/Y was supposed to provide.
   function handleImagePress(e: GestureResponderEvent) {
     if (scale <= 0 || editingSegmentId || newChordDraft) return;
-    const { locationX, locationY } = e.nativeEvent;
+    const { pageX, pageY } = e.nativeEvent;
 
-    if (addSectionMode) {
-      setLabelModalState({ mode: "new", x: locationX / scale, y: locationY / scale });
-      return;
-    }
+    hitAreaRef.current?.measure((_x, _y, _width, _height, containerPageX, containerPageY) => {
+      const x = (pageX - containerPageX) / scale;
+      const y = (pageY - containerPageY) / scale;
 
-    const avgHeight =
-      chordOverlays.length > 0
-        ? chordOverlays.reduce((sum, o) => sum + o.segment.chordPosition.height, 0) / chordOverlays.length
-        : sourceHeight * DEFAULT_CHORD_HEIGHT_RATIO;
-    setNewChordDraft({ x: locationX / scale, y: locationY / scale, height: avgHeight, text: "" });
+      if (addSectionMode) {
+        setLabelModalState({ mode: "new", x, y });
+        return;
+      }
+
+      const avgHeight =
+        chordOverlays.length > 0
+          ? chordOverlays.reduce((sum, o) => sum + o.segment.chordPosition.height, 0) / chordOverlays.length
+          : sourceHeight * DEFAULT_CHORD_HEIGHT_RATIO;
+      setNewChordDraft({ x, y, height: avgHeight, text: "" });
+    });
   }
 
   function commitNewChord() {
@@ -299,7 +314,10 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
 
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View
-          ref={viewShotRef}
+          ref={(node) => {
+            hitAreaRef.current = node;
+            if (viewShotRef) viewShotRef.current = node;
+          }}
           collapsable={false}
           style={{ aspectRatio: sourceWidth / sourceHeight }}
           onLayout={(e) => setDisplayWidth(e.nativeEvent.layout.width)}
