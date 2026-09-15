@@ -1,5 +1,13 @@
 import { createEmptySong, createLine, createSection, createSegment } from "../../types/song";
-import { addChord, addSectionMarker, moveChord, removeSectionMarker, updateSectionMarker, updateSegment } from "./editSong";
+import {
+  addChord,
+  addSectionMarker,
+  moveChord,
+  moveSectionMarker,
+  removeSectionMarker,
+  updateSectionMarker,
+  updateSegment,
+} from "./editSong";
 
 function makeSong() {
   const segment1 = createSegment({ chord: "G", lyric: "Amazing ", chordPosition: { x: 10, y: 20, width: 15, height: 12 } });
@@ -85,38 +93,67 @@ describe("addChord", () => {
   });
 });
 
-describe("addSectionMarker / updateSectionMarker / removeSectionMarker", () => {
-  it("adds a marker at the given position with the given label", () => {
+describe("addSectionMarker / updateSectionMarker / removeSectionMarker / moveSectionMarker", () => {
+  it("appends a marker with the given label", () => {
     const song = createEmptySong("Blank");
 
-    const updated = addSectionMarker(song, { x: 40, y: 200 }, "Chorus");
+    const updated = addSectionMarker(song, "Chorus");
 
     expect(updated.sectionMarkers).toHaveLength(1);
-    expect(updated.sectionMarkers[0]).toMatchObject({ label: "Chorus", x: 40, y: 200 });
+    expect(updated.sectionMarkers[0]).toMatchObject({ label: "Chorus" });
+  });
+
+  it("allows the same label to be added more than once", () => {
+    let song = addSectionMarker(createEmptySong("Blank"), "Chorus");
+    song = addSectionMarker(song, "Chorus");
+
+    expect(song.sectionMarkers.map((m) => m.label)).toEqual(["Chorus", "Chorus"]);
+    expect(song.sectionMarkers[0].id).not.toBe(song.sectionMarkers[1].id);
   });
 
   it("does not mutate the original song when adding", () => {
     const song = createEmptySong("Blank");
-    addSectionMarker(song, { x: 0, y: 0 }, "Chorus");
+    addSectionMarker(song, "Chorus");
     expect(song.sectionMarkers).toHaveLength(0);
   });
 
-  it("updates just the targeted marker's label and position", () => {
-    const song = addSectionMarker(createEmptySong("Blank"), { x: 0, y: 0 }, "Chorus");
+  it("updates just the targeted marker's label", () => {
+    const song = addSectionMarker(createEmptySong("Blank"), "Chorus");
     const markerId = song.sectionMarkers[0].id;
 
-    const updated = updateSectionMarker(song, markerId, { label: "Bridge", x: 10, y: 20 });
+    const updated = updateSectionMarker(song, markerId, { label: "Bridge" });
 
-    expect(updated.sectionMarkers[0]).toMatchObject({ label: "Bridge", x: 10, y: 20 });
+    expect(updated.sectionMarkers[0]).toMatchObject({ label: "Bridge" });
   });
 
   it("removes the targeted marker only", () => {
-    let song = addSectionMarker(createEmptySong("Blank"), { x: 0, y: 0 }, "Verse 1");
-    song = addSectionMarker(song, { x: 0, y: 100 }, "Chorus");
+    let song = addSectionMarker(createEmptySong("Blank"), "Verse 1");
+    song = addSectionMarker(song, "Chorus");
     const [keep, remove] = song.sectionMarkers;
 
     const updated = removeSectionMarker(song, remove.id);
 
     expect(updated.sectionMarkers).toEqual([keep]);
+  });
+
+  it("swaps a marker with its neighbor when moved", () => {
+    let song = addSectionMarker(createEmptySong("Blank"), "Intro");
+    song = addSectionMarker(song, "Verse 1");
+    song = addSectionMarker(song, "Chorus");
+    const [intro, verse, chorus] = song.sectionMarkers;
+
+    const movedLater = moveSectionMarker(song, intro.id, 1);
+    expect(movedLater.sectionMarkers.map((m) => m.id)).toEqual([verse.id, intro.id, chorus.id]);
+
+    const movedEarlier = moveSectionMarker(song, chorus.id, -1);
+    expect(movedEarlier.sectionMarkers.map((m) => m.id)).toEqual([intro.id, chorus.id, verse.id]);
+  });
+
+  it("does nothing when moving past either end", () => {
+    let song = addSectionMarker(createEmptySong("Blank"), "Intro");
+    song = addSectionMarker(song, "Verse 1");
+
+    expect(moveSectionMarker(song, song.sectionMarkers[0].id, -1)).toEqual(song);
+    expect(moveSectionMarker(song, song.sectionMarkers[1].id, 1)).toEqual(song);
   });
 });

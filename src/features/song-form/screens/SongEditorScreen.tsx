@@ -4,7 +4,6 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { transposeChord } from "../../transpose";
 import type { Song } from "../../../types/song";
 import { getSectionLabelColor } from "../sectionLabelColors";
-import { orderSectionMarkers } from "../sectionMarkerOrder";
 import { SongFormModal } from "./SongFormModal";
 import { SongInfoModal } from "./SongInfoModal";
 import { SourceOverlayScreen } from "./SourceOverlayScreen";
@@ -33,7 +32,6 @@ export function SongEditorScreen({
   const [songFormModalVisible, setSongFormModalVisible] = useState(false);
   const overlayRef = useRef<View>(null);
   const showPageNav = pageCount !== undefined && pageCount > 1 && pageIndex !== undefined;
-  const orderedMarkers = orderSectionMarkers(song.sectionMarkers);
 
   return (
     <View style={styles.container}>
@@ -76,7 +74,7 @@ export function SongEditorScreen({
       </View>
 
       <View style={styles.songFormRow}>
-        {orderedMarkers.length === 0 ? (
+        {song.sectionMarkers.length === 0 ? (
           <Pressable style={styles.songFormButton} onPress={() => setSongFormModalVisible(true)}>
             <Text style={styles.songFormButtonText}>+ 송폼 추가</Text>
           </Pressable>
@@ -88,7 +86,7 @@ export function SongEditorScreen({
               style={styles.songFormBadgeScroll}
               contentContainerStyle={styles.songFormBadgeRow}
             >
-              {orderedMarkers.map((marker, i) => (
+              {song.sectionMarkers.map((marker, i) => (
                 <View key={marker.id} style={styles.songFormBadgeGroup}>
                   {i > 0 && <Text style={styles.songFormArrow}>→</Text>}
                   <View style={[styles.songFormBadge, { backgroundColor: getSectionLabelColor(marker.label) }]}>

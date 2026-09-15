@@ -48,14 +48,11 @@ export interface Section {
   lines: Line[];
 }
 
-/** A Verse/Chorus/Bridge-style tag placed at a point on the source image, marking where that part of the chart starts. */
+/** A Verse/Chorus/Bridge-style tag describing one step of the song's structure. */
 export interface SectionMarker {
   id: string;
   /** e.g. "Verse 1", "Chorus", "Bridge" — picked from a preset list or typed in by hand. */
   label: string;
-  /** Position on the source image (pixel coordinates in `Song.sourceImage`'s space) where this section starts. */
-  x: number;
-  y: number;
 }
 
 export interface Song {
@@ -70,7 +67,7 @@ export interface Song {
   /** Freeform notes for this song — a sermon theme, talking points, anything worth remembering alongside the chart. */
   notes: string;
   sections: Section[];
-  /** Verse/Chorus/Bridge-style tags placed on the source image, independent of the OCR'd `sections` grouping. */
+  /** The song's structure — Verse/Chorus/Bridge-style tags in performance order, freely reorderable and repeatable, independent of the OCR'd `sections` grouping. */
   sectionMarkers: SectionMarker[];
   /** The scanned image this song was built from, if any, for the "view on original" overlay screen. */
   sourceImage?: { uri: string; width: number; height: number };

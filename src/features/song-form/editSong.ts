@@ -83,18 +83,14 @@ export function addChord(song: Song, position: NonNullable<Segment["chordPositio
   };
 }
 
-/** Places a new Verse/Chorus/Bridge-style label at a point on the source image. */
-export function addSectionMarker(song: Song, position: { x: number; y: number }, label: string): Song {
-  const marker: SectionMarker = { id: createId("marker"), label, x: position.x, y: position.y };
+/** Appends a new Verse/Chorus/Bridge-style label to the end of the song's structure. The same label can be added more than once (e.g. a song with two Chorus sections). */
+export function addSectionMarker(song: Song, label: string): Song {
+  const marker: SectionMarker = { id: createId("marker"), label };
   return { ...song, sectionMarkers: [...song.sectionMarkers, marker] };
 }
 
-/** Edits an existing section marker's label and/or position. */
-export function updateSectionMarker(
-  song: Song,
-  markerId: string,
-  changes: Partial<Pick<SectionMarker, "label" | "x" | "y">>
-): Song {
+/** Renames an existing section marker. */
+export function updateSectionMarker(song: Song, markerId: string, changes: Partial<Pick<SectionMarker, "label">>): Song {
   return {
     ...song,
     sectionMarkers: song.sectionMarkers.map((marker) => (marker.id === markerId ? { ...marker, ...changes } : marker)),
@@ -103,4 +99,20 @@ export function updateSectionMarker(
 
 export function removeSectionMarker(song: Song, markerId: string): Song {
   return { ...song, sectionMarkers: song.sectionMarkers.filter((marker) => marker.id !== markerId) };
+}
+
+/**
+ * Moves a section marker one spot earlier (-1) or later (+1) in the song's
+ * structure. The array order *is* the performance order — there's no
+ * separate position to derive it from — so reordering is a plain adjacent
+ * swap. A no-op past either end.
+ */
+export function moveSectionMarker(song: Song, markerId: string, direction: -1 | 1): Song {
+  const index = song.sectionMarkers.findIndex((marker) => marker.id === markerId);
+  const target = index + direction;
+  if (index === -1 || target < 0 || target >= song.sectionMarkers.length) return song;
+
+  const markers = [...song.sectionMarkers];
+  [markers[index], markers[target]] = [markers[target], markers[index]];
+  return { ...song, sectionMarkers: markers };
 }

@@ -5,6 +5,7 @@ export {
   addSectionMarker,
   updateSectionMarker,
   removeSectionMarker,
+  moveSectionMarker,
   type SegmentLocation,
 } from "./editSong";
 export { SongEditorScreen } from "./screens/SongEditorScreen";

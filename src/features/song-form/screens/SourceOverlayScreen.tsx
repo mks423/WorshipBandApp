@@ -3,19 +3,9 @@ import type { RefObject } from "react";
 import { Image, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { GestureResponderEvent } from "react-native";
 
-import type { Segment, SectionMarker, Song } from "../../../types/song";
-import {
-  addChord,
-  addSectionMarker,
-  moveChord,
-  removeSectionMarker,
-  updateSectionMarker,
-  updateSegment,
-  type SegmentLocation,
-} from "../editSong";
+import type { Segment, Song } from "../../../types/song";
+import { addChord, moveChord, updateSegment, type SegmentLocation } from "../editSong";
 import { ConfirmModal } from "./ConfirmModal";
-import { SectionLabelModal } from "./SectionLabelModal";
-import { getSectionLabelColor } from "../sectionLabelColors";
 import { isWebImageRef, resolveWebImageUri } from "../../../utils/webImageStore";
 
 /** A touch that moves less than this (in screen px) is treated as a tap, not a drag. */
@@ -47,8 +37,6 @@ interface PendingChordAction {
   newText: string;
 }
 
-type LabelModalState = { mode: "new"; x: number; y: number } | { mode: "edit"; markerId: string; initialLabel: string };
-
 /** Bar/measure numbers OCR'd alongside real chords on the same line (e.g. a lone "16") aren't chords and don't need editing. */
 const PURE_NUMBER = /^\d+$/;
 
@@ -77,8 +65,6 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
   const [newChordDraft, setNewChordDraft] = useState<NewChordDraft | null>(null);
   const [comparing, setComparing] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingChordAction | null>(null);
-  const [addSectionMode, setAddSectionMode] = useState(false);
-  const [labelModalState, setLabelModalState] = useState<LabelModalState | null>(null);
   const [resolvedImageUri, setResolvedImageUri] = useState<string | null>(null);
 
   // On web, a saved image is stored as a wba-idb:// reference (see
@@ -113,8 +99,6 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
     setNewChordDraft(null);
     setComparing(false);
     setPendingAction(null);
-    setAddSectionMode(false);
-    setLabelModalState(null);
   }, [song.id]);
 
   if (!song.sourceImage) {
@@ -205,11 +189,6 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
       const x = (pageX - containerPageX) / scale;
       const y = (pageY - containerPageY) / scale;
 
-      if (addSectionMode) {
-        setLabelModalState({ mode: "new", x, y });
-        return;
-      }
-
       const avgHeight =
         chordOverlays.length > 0
           ? chordOverlays.reduce((sum, o) => sum + o.segment.chordPosition.height, 0) / chordOverlays.length
@@ -231,28 +210,6 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
     setNewChordDraft(null);
   }
 
-  function moveSectionMarker(markerId: string, currentPosition: { x: number; y: number }, deltaSourceX: number, deltaSourceY: number) {
-    onSongChange(
-      updateSectionMarker(song, markerId, { x: currentPosition.x + deltaSourceX, y: currentPosition.y + deltaSourceY })
-    );
-  }
-
-  function confirmLabelModal(label: string) {
-    if (labelModalState?.mode === "new") {
-      onSongChange(addSectionMarker(song, { x: labelModalState.x, y: labelModalState.y }, label));
-    } else if (labelModalState?.mode === "edit") {
-      onSongChange(updateSectionMarker(song, labelModalState.markerId, { label }));
-    }
-    setLabelModalState(null);
-  }
-
-  function deleteLabelModalMarker() {
-    if (labelModalState?.mode === "edit") {
-      onSongChange(removeSectionMarker(song, labelModalState.markerId));
-    }
-    setLabelModalState(null);
-  }
-
   return (
     <View style={styles.container}>
       <View style={styles.toolbar}>
@@ -265,24 +222,10 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
           </Pressable>
           <Pressable
             style={[styles.addChordButton, addChordMode && styles.addChordButtonActive]}
-            onPress={() => {
-              setAddSectionMode(false);
-              setAddChordMode((prev) => !prev);
-            }}
+            onPress={() => setAddChordMode((prev) => !prev)}
           >
             <Text style={[styles.addChordButtonText, addChordMode && styles.addChordButtonTextActive]}>
               {addChordMode ? "추가 종료" : "+ 코드 추가"}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.addSectionButton, addSectionMode && styles.addSectionButtonActive]}
-            onPress={() => {
-              setAddChordMode(false);
-              setAddSectionMode((prev) => !prev);
-            }}
-          >
-            <Text style={[styles.addSectionButtonText, addSectionMode && styles.addSectionButtonTextActive]}>
-              {addSectionMode ? "추가 종료" : "+ 섹션 라벨"}
             </Text>
           </Pressable>
           <View style={styles.textScaleControl}>
@@ -314,7 +257,7 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
         >
           <Pressable
             style={StyleSheet.absoluteFill}
-            disabled={(!addChordMode && !addSectionMode) || comparing}
+            disabled={!addChordMode || comparing}
             onPress={handleImagePress}
           >
             {uri && <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />}
@@ -400,28 +343,8 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
                 />
               );
             })()}
-          {scale > 0 &&
-            !comparing &&
-            song.sectionMarkers.map((marker) => (
-              <SectionMarkerBadge
-                key={marker.id}
-                marker={marker}
-                position={{ left: marker.x * scale, top: marker.y * scale }}
-                scale={scale}
-                onTap={() => setLabelModalState({ mode: "edit", markerId: marker.id, initialLabel: marker.label })}
-                onMove={(deltaSourceX, deltaSourceY) => moveSectionMarker(marker.id, marker, deltaSourceX, deltaSourceY)}
-              />
-            ))}
         </View>
       </ScrollView>
-
-      <SectionLabelModal
-        visible={labelModalState !== null}
-        initialLabel={labelModalState?.mode === "edit" ? labelModalState.initialLabel : undefined}
-        onConfirm={confirmLabelModal}
-        onDelete={labelModalState?.mode === "edit" ? deleteLabelModalMarker : undefined}
-        onClose={() => setLabelModalState(null)}
-      />
 
       <ConfirmModal
         visible={pendingAction !== null}
@@ -507,67 +430,6 @@ function ChordBadge({ chord, position, fontSize, scale, onTap, onMove }: ChordBa
   );
 }
 
-interface SectionMarkerBadgeProps {
-  marker: SectionMarker;
-  position: { left: number; top: number };
-  /** display-px-per-source-px, used to convert a drag's screen-space delta back into source-image coordinates. */
-  scale: number;
-  onTap: () => void;
-  onMove: (deltaSourceX: number, deltaSourceY: number) => void;
-}
-
-/** A Verse/Chorus/Bridge-style tag on the overlay. Same tap-vs-drag behavior as ChordBadge: a short touch opens the label picker, a drag repositions it. */
-function SectionMarkerBadge({ marker, position, scale, onTap, onMove }: SectionMarkerBadgeProps) {
-  const [dragOffset, setDragOffset] = useState({ dx: 0, dy: 0 });
-  const draggedRef = useRef(false);
-
-  // See ChordBadge for why these need to be refs, not the closed-over props directly.
-  const scaleRef = useRef(scale);
-  scaleRef.current = scale;
-  const onTapRef = useRef(onTap);
-  onTapRef.current = onTap;
-  const onMoveRef = useRef(onMove);
-  onMoveRef.current = onMove;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        draggedRef.current = false;
-      },
-      onPanResponderMove: (_, gesture) => {
-        if (Math.abs(gesture.dx) > DRAG_THRESHOLD || Math.abs(gesture.dy) > DRAG_THRESHOLD) {
-          draggedRef.current = true;
-        }
-        setDragOffset({ dx: gesture.dx, dy: gesture.dy });
-      },
-      onPanResponderRelease: (_, gesture) => {
-        if (draggedRef.current && scaleRef.current > 0) {
-          onMoveRef.current(gesture.dx / scaleRef.current, gesture.dy / scaleRef.current);
-        } else {
-          onTapRef.current();
-        }
-        setDragOffset({ dx: 0, dy: 0 });
-      },
-      onPanResponderTerminate: () => setDragOffset({ dx: 0, dy: 0 }),
-    })
-  ).current;
-
-  return (
-    <View
-      {...panResponder.panHandlers}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      style={[
-        styles.sectionMarker,
-        { backgroundColor: getSectionLabelColor(marker.label) },
-        { left: position.left + dragOffset.dx, top: position.top + dragOffset.dy },
-      ]}
-    >
-      <Text style={styles.sectionMarkerText}>{marker.label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -624,23 +486,6 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   addChordButtonTextActive: {
-    color: "#fff",
-  },
-  addSectionButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: "#eee",
-  },
-  addSectionButtonActive: {
-    backgroundColor: "#6b3fd4",
-  },
-  addSectionButtonText: {
-    fontWeight: "700",
-    fontSize: 12,
-    color: "#333",
-  },
-  addSectionButtonTextActive: {
     color: "#fff",
   },
   textScaleControl: {
@@ -733,16 +578,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     lineHeight: 12,
-  },
-  sectionMarker: {
-    position: "absolute",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  sectionMarkerText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 11,
   },
 });

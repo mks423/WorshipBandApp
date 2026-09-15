@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { removeSectionMarker, updateSectionMarker } from "../editSong";
+import { addSectionMarker, moveSectionMarker, removeSectionMarker, updateSectionMarker } from "../editSong";
 import { getSectionLabelColor } from "../sectionLabelColors";
-import { orderSectionMarkers } from "../sectionMarkerOrder";
 import type { Song } from "../../../types/song";
+import { SectionLabelModal } from "./SectionLabelModal";
 
 interface SongFormModalProps {
   visible: boolean;
@@ -19,10 +19,10 @@ interface SongFormModalProps {
  * (song form/structure) here means the song's section layout, not the
  * unrelated "송폼" (setlist) feature elsewhere in this app.
  *
- * Only renames/removes *existing* markers. Placing a brand-new one still
- * happens by tapping the chart directly (via "+ 섹션 라벨" in the overlay
- * toolbar), since that needs a screen position this modal has no way to
- * capture.
+ * The list order *is* the performance order (there's no separate chart
+ * position driving it), so markers are freely reorderable with the ▲/▼
+ * buttons and the same label can be added more than once (e.g. a song with
+ * two separate Chorus sections) — adding just appends a new entry.
  *
  * Same draft-then-commit pattern as SongInfoModal: edits are staged
  * locally and only applied via onSongChange on "업데이트"; "취소" discards
@@ -30,9 +30,13 @@ interface SongFormModalProps {
  */
 export function SongFormModal({ visible, song, onSongChange, onClose }: SongFormModalProps) {
   const [draft, setDraft] = useState(song);
+  const [addingLabel, setAddingLabel] = useState(false);
 
   useEffect(() => {
-    if (visible) setDraft(song);
+    if (visible) {
+      setDraft(song);
+      setAddingLabel(false);
+    }
   }, [visible, song]);
 
   function commit() {
@@ -40,7 +44,7 @@ export function SongFormModal({ visible, song, onSongChange, onClose }: SongForm
     onClose();
   }
 
-  const orderedMarkers = orderSectionMarkers(draft.sectionMarkers);
+  const markers = draft.sectionMarkers;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -49,13 +53,27 @@ export function SongFormModal({ visible, song, onSongChange, onClose }: SongForm
           <Text style={styles.title}>송폼 편집</Text>
 
           <ScrollView keyboardShouldPersistTaps="handled">
-            {orderedMarkers.length === 0 ? (
-              <Text style={styles.emptyText}>
-                등록된 섹션 라벨이 없습니다. 악보를 탭해 "+ 섹션 라벨"로 추가하세요.
-              </Text>
+            {markers.length === 0 ? (
+              <Text style={styles.emptyText}>등록된 송폼이 없습니다. 아래 "+ 추가"로 곡의 구조를 등록하세요.</Text>
             ) : (
-              orderedMarkers.map((marker) => (
+              markers.map((marker, i) => (
                 <View key={marker.id} style={styles.markerRow}>
+                  <View style={styles.reorderColumn}>
+                    <Pressable
+                      style={[styles.reorderButton, i === 0 && styles.reorderButtonDisabled]}
+                      disabled={i === 0}
+                      onPress={() => setDraft((prev) => moveSectionMarker(prev, marker.id, -1))}
+                    >
+                      <Text style={styles.reorderButtonText}>▲</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.reorderButton, i === markers.length - 1 && styles.reorderButtonDisabled]}
+                      disabled={i === markers.length - 1}
+                      onPress={() => setDraft((prev) => moveSectionMarker(prev, marker.id, 1))}
+                    >
+                      <Text style={styles.reorderButtonText}>▼</Text>
+                    </Pressable>
+                  </View>
                   <View style={[styles.markerSwatch, { backgroundColor: getSectionLabelColor(marker.label) }]} />
                   <TextInput
                     style={styles.markerInput}
@@ -71,6 +89,10 @@ export function SongFormModal({ visible, song, onSongChange, onClose }: SongForm
                 </View>
               ))
             )}
+
+            <Pressable style={styles.addButton} onPress={() => setAddingLabel(true)}>
+              <Text style={styles.addButtonText}>+ 추가</Text>
+            </Pressable>
           </ScrollView>
 
           <View style={styles.buttonRow}>
@@ -83,6 +105,15 @@ export function SongFormModal({ visible, song, onSongChange, onClose }: SongForm
           </View>
         </Pressable>
       </Pressable>
+
+      <SectionLabelModal
+        visible={addingLabel}
+        onConfirm={(label) => {
+          setDraft((prev) => addSectionMarker(prev, label));
+          setAddingLabel(false);
+        }}
+        onClose={() => setAddingLabel(false)}
+      />
     </Modal>
   );
 }
@@ -118,6 +149,25 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
   },
+  reorderColumn: {
+    gap: 2,
+  },
+  reorderButton: {
+    width: 22,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 4,
+    backgroundColor: "#eee",
+  },
+  reorderButtonDisabled: {
+    opacity: 0.35,
+  },
+  reorderButtonText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#333",
+  },
   markerSwatch: {
     width: 10,
     height: 10,
@@ -141,6 +191,16 @@ const styles = StyleSheet.create({
   markerDeleteButtonText: {
     fontWeight: "700",
     color: "#c0392b",
+  },
+  addButton: {
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#eef4ff",
+  },
+  addButtonText: {
+    fontWeight: "700",
+    color: "#2f6feb",
   },
   buttonRow: {
     flexDirection: "row",
