@@ -6,8 +6,8 @@ import type { Song } from "../../../types/song";
 import { alertCompat } from "../../../utils/alertCompat";
 import { exportPageAsImage, exportPageAsPdf } from "../exportSong";
 import { ExportModal } from "./ExportModal";
-import { KeyChangeModal } from "./KeyChangeModal";
 import { NotesModal } from "./NotesModal";
+import { SongInfoModal } from "./SongInfoModal";
 import { SourceOverlayScreen } from "./SourceOverlayScreen";
 
 interface SongEditorScreenProps {
@@ -33,7 +33,7 @@ export function SongEditorScreen({
   pageCount,
   onNavigatePage,
 }: SongEditorScreenProps) {
-  const [keyModalVisible, setKeyModalVisible] = useState(false);
+  const [infoModalVisible, setInfoModalVisible] = useState(false);
   const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -118,7 +118,7 @@ export function SongEditorScreen({
       )}
 
       <View style={styles.bottomBar}>
-        <Pressable style={styles.bottomButton} onPress={() => setKeyModalVisible(true)}>
+        <Pressable style={styles.bottomButton} onPress={() => setInfoModalVisible(true)}>
           <Text style={styles.bottomButtonText}>편집</Text>
         </Pressable>
         {song.sourceImage && (
@@ -131,11 +131,11 @@ export function SongEditorScreen({
         </Pressable>
       </View>
 
-      <KeyChangeModal
-        visible={keyModalVisible}
+      <SongInfoModal
+        visible={infoModalVisible}
         song={song}
         onSongChange={onSongChange}
-        onClose={() => setKeyModalVisible(false)}
+        onClose={() => setInfoModalVisible(false)}
       />
 
       <ExportModal
