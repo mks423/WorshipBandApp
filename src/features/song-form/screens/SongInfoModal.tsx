@@ -52,8 +52,8 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>곡 정보</Text>
 
@@ -155,8 +155,8 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
               <Text style={styles.updateButtonText}>업데이트</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

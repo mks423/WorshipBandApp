@@ -14,8 +14,8 @@ interface ConfirmModalProps {
 export function ConfirmModal({ visible, title, message, confirmLabel, destructive, onConfirm, onCancel }: ConfirmModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
+      <Pressable style={styles.backdrop} onPress={onCancel}>
+        <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.buttonRow}>
@@ -29,8 +29,8 @@ export function ConfirmModal({ visible, title, message, confirmLabel, destructiv
               <Text style={styles.confirmButtonText}>{confirmLabel}</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

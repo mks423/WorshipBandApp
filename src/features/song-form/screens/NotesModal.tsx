@@ -1,4 +1,4 @@
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, TextInput } from "react-native";
 
 import type { Song } from "../../../types/song";
 
@@ -12,9 +12,9 @@ interface NotesModalProps {
 /** Freeform notes for a song — a sermon theme, talking points, or anything else worth keeping alongside the chart. */
 export function NotesModal({ visible, song, onSongChange, onClose }: NotesModalProps) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>주제 말씀 / 나눔 메모</Text>
           <TextInput
             style={styles.notesInput}
@@ -28,8 +28,8 @@ export function NotesModal({ visible, song, onSongChange, onClose }: NotesModalP
           <Pressable style={styles.doneButton} onPress={onClose}>
             <Text style={styles.doneButtonText}>완료</Text>
           </Pressable>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -37,13 +37,16 @@ export function NotesModal({ visible, song, onSongChange, onClose }: NotesModalP
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    justifyContent: "flex-end",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.35)",
+    padding: 24,
   },
   sheet: {
+    width: "100%",
+    maxWidth: 420,
     backgroundColor: "#fff",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderRadius: 14,
     padding: 20,
     gap: 16,
   },

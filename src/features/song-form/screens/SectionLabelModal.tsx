@@ -38,9 +38,9 @@ export function SectionLabelModal({ visible, initialLabel, onConfirm, onDelete, 
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{initialLabel ? "섹션 라벨 수정" : "섹션 라벨 추가"}</Text>
 
           <View style={styles.presetGrid}>
@@ -73,8 +73,8 @@ export function SectionLabelModal({ visible, initialLabel, onConfirm, onDelete, 
           <Pressable style={styles.cancelButton} onPress={onClose}>
             <Text style={styles.cancelButtonText}>취소</Text>
           </Pressable>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -82,13 +82,16 @@ export function SectionLabelModal({ visible, initialLabel, onConfirm, onDelete, 
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    justifyContent: "flex-end",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.35)",
+    padding: 24,
   },
   sheet: {
+    width: "100%",
+    maxWidth: 420,
     backgroundColor: "#fff",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderRadius: 14,
     padding: 20,
     gap: 14,
   },

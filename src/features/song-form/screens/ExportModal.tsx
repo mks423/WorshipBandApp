@@ -1,4 +1,4 @@
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text } from "react-native";
 
 interface ExportModalProps {
   visible: boolean;
@@ -11,9 +11,9 @@ interface ExportModalProps {
 /** Lets the current page be saved/shared as a PNG or a PDF. */
 export function ExportModal({ visible, exporting, onExportImage, onExportPdf, onClose }: ExportModalProps) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={exporting ? undefined : onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>내보내기</Text>
           <Text style={styles.subtitle}>지금 보이는 페이지를 코드가 반영된 상태로 내보냅니다</Text>
 
@@ -33,8 +33,8 @@ export function ExportModal({ visible, exporting, onExportImage, onExportPdf, on
           <Pressable style={styles.doneButton} onPress={onClose} disabled={exporting}>
             <Text style={styles.doneButtonText}>닫기</Text>
           </Pressable>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -42,13 +42,16 @@ export function ExportModal({ visible, exporting, onExportImage, onExportPdf, on
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    justifyContent: "flex-end",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.35)",
+    padding: 24,
   },
   sheet: {
+    width: "100%",
+    maxWidth: 420,
     backgroundColor: "#fff",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderRadius: 14,
     padding: 20,
     gap: 12,
   },

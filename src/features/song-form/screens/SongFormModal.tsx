@@ -40,8 +40,8 @@ export function SongFormModal({ visible, song, onSongChange, onClose }: SongForm
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>송폼 편집</Text>
 
           <ScrollView keyboardShouldPersistTaps="handled">
@@ -76,8 +76,8 @@ export function SongFormModal({ visible, song, onSongChange, onClose }: SongForm
               <Text style={styles.updateButtonText}>업데이트</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
