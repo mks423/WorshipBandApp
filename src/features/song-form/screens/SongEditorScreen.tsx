@@ -3,10 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { transposeChord } from "../../transpose";
 import type { Song } from "../../../types/song";
-import { alertCompat } from "../../../utils/alertCompat";
-import { exportPageAsImage, exportPageAsPdf } from "../exportSong";
-import { ExportModal } from "./ExportModal";
-import { NotesModal } from "./NotesModal";
+import { SongFormModal } from "./SongFormModal";
 import { SongInfoModal } from "./SongInfoModal";
 import { SourceOverlayScreen } from "./SourceOverlayScreen";
 
@@ -14,8 +11,6 @@ interface SongEditorScreenProps {
   song: Song;
   onSongChange: (song: Song) => void;
   onDone: () => void;
-  /** Label for the bottom-bar "done" button — differs by how this screen was reached (e.g. "목록으로" from a multi-song batch, "완료" otherwise). */
-  doneLabel?: string;
   /** This song's position within a multi-page scan batch (0-based), for the page-flip row. Omit for a single scanned song. */
   pageIndex?: number;
   /** Total pages in the current batch. The page-flip row only shows when this is greater than 1. */
@@ -28,33 +23,14 @@ export function SongEditorScreen({
   song,
   onSongChange,
   onDone,
-  doneLabel = "완료",
   pageIndex,
   pageCount,
   onNavigatePage,
 }: SongEditorScreenProps) {
   const [infoModalVisible, setInfoModalVisible] = useState(false);
-  const [notesModalVisible, setNotesModalVisible] = useState(false);
-  const [exportModalVisible, setExportModalVisible] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [songFormModalVisible, setSongFormModalVisible] = useState(false);
   const overlayRef = useRef<View>(null);
   const showPageNav = pageCount !== undefined && pageCount > 1 && pageIndex !== undefined;
-
-  async function handleExport(kind: "image" | "pdf") {
-    setExporting(true);
-    try {
-      if (kind === "image") {
-        await exportPageAsImage(overlayRef, song.title);
-      } else {
-        await exportPageAsPdf(overlayRef, song.title);
-      }
-      setExportModalVisible(false);
-    } catch (error) {
-      alertCompat("내보내기 실패", error instanceof Error ? error.message : String(error));
-    } finally {
-      setExporting(false);
-    }
-  }
 
   return (
     <View style={styles.container}>
@@ -85,12 +61,23 @@ export function SongEditorScreen({
               keyboardType="number-pad"
             />
           </View>
-          <Pressable onPress={() => setNotesModalVisible(true)}>
-            <Text style={[styles.keyInfoText, styles.notesLink]}>
-              {song.notes.trim().length > 0 ? "메모 있음" : "+ 메모"}
-            </Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable style={styles.headerActionButton} onPress={() => setInfoModalVisible(true)}>
+              <Text style={styles.headerActionButtonText}>편집</Text>
+            </Pressable>
+            <Pressable style={styles.headerActionButton} onPress={onDone}>
+              <Text style={styles.headerActionButtonText}>목록</Text>
+            </Pressable>
+          </View>
         </View>
+      </View>
+
+      <View style={styles.songFormRow}>
+        <Pressable style={styles.songFormButton} onPress={() => setSongFormModalVisible(true)}>
+          <Text style={styles.songFormButtonText}>
+            {song.sectionMarkers.length > 0 ? `송폼 (${song.sectionMarkers.length})` : "+ 송폼 추가"}
+          </Text>
+        </Pressable>
       </View>
 
       <SourceOverlayScreen song={song} onSongChange={onSongChange} viewShotRef={overlayRef} />
@@ -117,20 +104,6 @@ export function SongEditorScreen({
         </View>
       )}
 
-      <View style={styles.bottomBar}>
-        <Pressable style={styles.bottomButton} onPress={() => setInfoModalVisible(true)}>
-          <Text style={styles.bottomButtonText}>편집</Text>
-        </Pressable>
-        {song.sourceImage && (
-          <Pressable style={styles.bottomButton} onPress={() => setExportModalVisible(true)}>
-            <Text style={styles.bottomButtonText}>내보내기</Text>
-          </Pressable>
-        )}
-        <Pressable style={styles.bottomButton} onPress={onDone}>
-          <Text style={styles.bottomButtonText}>{doneLabel}</Text>
-        </Pressable>
-      </View>
-
       <SongInfoModal
         visible={infoModalVisible}
         song={song}
@@ -138,19 +111,11 @@ export function SongEditorScreen({
         onClose={() => setInfoModalVisible(false)}
       />
 
-      <ExportModal
-        visible={exportModalVisible}
-        exporting={exporting}
-        onExportImage={() => handleExport("image")}
-        onExportPdf={() => handleExport("pdf")}
-        onClose={() => setExportModalVisible(false)}
-      />
-
-      <NotesModal
-        visible={notesModalVisible}
+      <SongFormModal
+        visible={songFormModalVisible}
         song={song}
         onSongChange={onSongChange}
-        onClose={() => setNotesModalVisible(false)}
+        onClose={() => setSongFormModalVisible(false)}
       />
     </View>
   );
@@ -176,6 +141,7 @@ const styles = StyleSheet.create({
   keyInfoRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 16,
   },
   keyInfoText: {
@@ -197,8 +163,39 @@ const styles = StyleSheet.create({
     borderBottomColor: "#ddd",
     paddingVertical: 2,
   },
-  notesLink: {
-    color: "#2f6feb",
+  headerActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginLeft: "auto",
+  },
+  headerActionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#2f6feb",
+  },
+  headerActionButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  songFormRow: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  songFormButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#eee",
+  },
+  songFormButtonText: {
+    fontWeight: "700",
+    fontSize: 13,
+    color: "#333",
   },
   pageNavRow: {
     flexDirection: "row",
@@ -227,17 +224,5 @@ const styles = StyleSheet.create({
   pageIndicator: {
     fontWeight: "700",
     color: "#333",
-  },
-  bottomBar: {
-    flexDirection: "row",
-  },
-  bottomButton: {
-    flex: 1,
-    padding: 16,
-    alignItems: "center",
-    backgroundColor: "#eee",
-  },
-  bottomButtonText: {
-    fontWeight: "700",
   },
 });

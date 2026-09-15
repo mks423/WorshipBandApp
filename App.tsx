@@ -184,7 +184,6 @@ export default function App() {
         song={songs[editingIndex]}
         onSongChange={(song) => updateSong(editingIndex, song)}
         onDone={() => (songs.length > 1 ? setEditingIndex(null) : backToLibrary())}
-        doneLabel={songs.length > 1 ? "목록으로" : "완료"}
         pageIndex={editingIndex}
         pageCount={songs.length}
         onNavigatePage={navigatePage}

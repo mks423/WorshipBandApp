@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { removeSectionMarker, updateSectionMarker } from "../editSong";
 import { CHROMATIC_KEYS, semitonesBetweenKeys, transposeChord, transposeSong, transposeSongToKey } from "../../transpose";
 import type { Song } from "../../../types/song";
 
@@ -146,26 +145,6 @@ export function SongInfoModal({ visible, song, onSongChange, onClose }: SongInfo
               </View>
             )}
 
-            <Text style={[styles.fieldLabel, styles.sectionDivider]}>섹션 라벨</Text>
-            {draft.sectionMarkers.length === 0 ? (
-              <Text style={styles.subtitle}>등록된 섹션 라벨이 없습니다. 악보를 탭해 "+ 섹션 라벨"로 추가하세요.</Text>
-            ) : (
-              draft.sectionMarkers.map((marker) => (
-                <View key={marker.id} style={styles.markerRow}>
-                  <TextInput
-                    style={[styles.textInput, styles.markerInput]}
-                    value={marker.label}
-                    onChangeText={(label) => setDraft((prev) => updateSectionMarker(prev, marker.id, { label }))}
-                  />
-                  <Pressable
-                    style={styles.markerDeleteButton}
-                    onPress={() => setDraft((prev) => removeSectionMarker(prev, marker.id))}
-                  >
-                    <Text style={styles.markerDeleteButtonText}>삭제</Text>
-                  </Pressable>
-                </View>
-              ))
-            )}
           </ScrollView>
 
           <View style={styles.buttonRow}>
@@ -312,25 +291,6 @@ const styles = StyleSheet.create({
   },
   keyButtonTextActive: {
     color: "#fff",
-  },
-  markerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  markerInput: {
-    flex: 1,
-  },
-  markerDeleteButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: "#fdecea",
-  },
-  markerDeleteButtonText: {
-    fontWeight: "700",
-    color: "#c0392b",
   },
   buttonRow: {
     flexDirection: "row",

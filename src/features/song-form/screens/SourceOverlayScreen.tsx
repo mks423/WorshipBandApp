@@ -255,16 +255,6 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
   return (
     <View style={styles.container}>
       <View style={styles.toolbar}>
-        <Text style={styles.hint}>
-          {comparing
-            ? "원본 이미지 (누르고 있는 동안)"
-            : addChordMode
-              ? "빈 자리를 탭해 코드를 추가하세요"
-              : addSectionMode
-                ? "빈 자리를 탭해 섹션 라벨을 추가하세요"
-                : "코드를 탭하면 수정, 드래그하면 위치를 옮길 수 있습니다"}
-        </Text>
-        <View style={styles.toolbarControls}>
           <Pressable
             style={[styles.compareButton, comparing && styles.compareButtonActive]}
             onPressIn={() => setComparing(true)}
@@ -309,7 +299,6 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
               <Text style={styles.textScaleButtonText}>가＋</Text>
             </Pressable>
           </View>
-        </View>
       </View>
 
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
@@ -590,24 +579,13 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 10,
     padding: 16,
     paddingBottom: 12,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
-  },
-  hint: {
-    fontSize: 12,
-    color: "#888",
-    flexShrink: 1,
-  },
-  toolbarControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
   },
   compareButton: {
     paddingHorizontal: 10,
