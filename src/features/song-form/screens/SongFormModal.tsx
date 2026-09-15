@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { removeSectionMarker, updateSectionMarker } from "../editSong";
+import { getSectionLabelColor } from "../sectionLabelColors";
+import { orderSectionMarkers } from "../sectionMarkerOrder";
 import type { Song } from "../../../types/song";
 
 interface SongFormModalProps {
@@ -38,6 +40,8 @@ export function SongFormModal({ visible, song, onSongChange, onClose }: SongForm
     onClose();
   }
 
+  const orderedMarkers = orderSectionMarkers(draft.sectionMarkers);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -45,13 +49,14 @@ export function SongFormModal({ visible, song, onSongChange, onClose }: SongForm
           <Text style={styles.title}>송폼 편집</Text>
 
           <ScrollView keyboardShouldPersistTaps="handled">
-            {draft.sectionMarkers.length === 0 ? (
+            {orderedMarkers.length === 0 ? (
               <Text style={styles.emptyText}>
                 등록된 섹션 라벨이 없습니다. 악보를 탭해 "+ 섹션 라벨"로 추가하세요.
               </Text>
             ) : (
-              draft.sectionMarkers.map((marker) => (
+              orderedMarkers.map((marker) => (
                 <View key={marker.id} style={styles.markerRow}>
+                  <View style={[styles.markerSwatch, { backgroundColor: getSectionLabelColor(marker.label) }]} />
                   <TextInput
                     style={styles.markerInput}
                     value={marker.label}
@@ -112,6 +117,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginBottom: 8,
+  },
+  markerSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   markerInput: {
     flex: 1,

@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { transposeChord } from "../../transpose";
 import type { Song } from "../../../types/song";
+import { getSectionLabelColor } from "../sectionLabelColors";
+import { orderSectionMarkers } from "../sectionMarkerOrder";
 import { SongFormModal } from "./SongFormModal";
 import { SongInfoModal } from "./SongInfoModal";
 import { SourceOverlayScreen } from "./SourceOverlayScreen";
@@ -31,6 +33,7 @@ export function SongEditorScreen({
   const [songFormModalVisible, setSongFormModalVisible] = useState(false);
   const overlayRef = useRef<View>(null);
   const showPageNav = pageCount !== undefined && pageCount > 1 && pageIndex !== undefined;
+  const orderedMarkers = orderSectionMarkers(song.sectionMarkers);
 
   return (
     <View style={styles.container}>
@@ -73,11 +76,32 @@ export function SongEditorScreen({
       </View>
 
       <View style={styles.songFormRow}>
-        <Pressable style={styles.songFormButton} onPress={() => setSongFormModalVisible(true)}>
-          <Text style={styles.songFormButtonText}>
-            {song.sectionMarkers.length > 0 ? `송폼 (${song.sectionMarkers.length})` : "+ 송폼 추가"}
-          </Text>
-        </Pressable>
+        {orderedMarkers.length === 0 ? (
+          <Pressable style={styles.songFormButton} onPress={() => setSongFormModalVisible(true)}>
+            <Text style={styles.songFormButtonText}>+ 송폼 추가</Text>
+          </Pressable>
+        ) : (
+          <>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.songFormBadgeScroll}
+              contentContainerStyle={styles.songFormBadgeRow}
+            >
+              {orderedMarkers.map((marker, i) => (
+                <View key={marker.id} style={styles.songFormBadgeGroup}>
+                  {i > 0 && <Text style={styles.songFormArrow}>→</Text>}
+                  <View style={[styles.songFormBadge, { backgroundColor: getSectionLabelColor(marker.label) }]}>
+                    <Text style={styles.songFormBadgeText}>{marker.label}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.songFormButton} onPress={() => setSongFormModalVisible(true)}>
+              <Text style={styles.songFormButtonText}>편집</Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <SourceOverlayScreen song={song} onSongChange={onSongChange} viewShotRef={overlayRef} />
@@ -181,6 +205,8 @@ const styles = StyleSheet.create({
   },
   songFormRow: {
     flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
@@ -196,6 +222,33 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 13,
     color: "#333",
+  },
+  songFormBadgeScroll: {
+    flex: 1,
+  },
+  songFormBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  songFormBadgeGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  songFormArrow: {
+    color: "#aaa",
+    fontWeight: "700",
+  },
+  songFormBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  songFormBadgeText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 12,
   },
   pageNavRow: {
     flexDirection: "row",

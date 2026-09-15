@@ -15,6 +15,7 @@ import {
 } from "../editSong";
 import { ConfirmModal } from "./ConfirmModal";
 import { SectionLabelModal } from "./SectionLabelModal";
+import { getSectionLabelColor } from "../sectionLabelColors";
 import { isWebImageRef, resolveWebImageUri } from "../../../utils/webImageStore";
 
 /** A touch that moves less than this (in screen px) is treated as a tap, not a drag. */
@@ -556,7 +557,11 @@ function SectionMarkerBadge({ marker, position, scale, onTap, onMove }: SectionM
     <View
       {...panResponder.panHandlers}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      style={[styles.sectionMarker, { left: position.left + dragOffset.dx, top: position.top + dragOffset.dy }]}
+      style={[
+        styles.sectionMarker,
+        { backgroundColor: getSectionLabelColor(marker.label) },
+        { left: position.left + dragOffset.dx, top: position.top + dragOffset.dy },
+      ]}
     >
       <Text style={styles.sectionMarkerText}>{marker.label}</Text>
     </View>
@@ -731,7 +736,6 @@ const styles = StyleSheet.create({
   },
   sectionMarker: {
     position: "absolute",
-    backgroundColor: "#6b3fd4",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
