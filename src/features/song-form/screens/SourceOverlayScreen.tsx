@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { Image, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { GestureResponderEvent } from "react-native";
 
 import type { Segment, Song } from "../../../types/song";
@@ -57,7 +57,7 @@ const DEFAULT_CHORD_HEIGHT_RATIO = 0.025;
  */
 export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceOverlayScreenProps) {
   const hitAreaRef = useRef<View>(null);
-  const [displayWidth, setDisplayWidth] = useState(0);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [textScale, setTextScale] = useState(1);
@@ -114,7 +114,15 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
   // effect rather than briefly handing it to <Image> and triggering a
   // failed load for an unknown URL scheme.
   const uri = resolvedImageUri ?? (isWebImageRef(sourceUri) ? undefined : sourceUri);
-  const scale = displayWidth > 0 ? displayWidth / sourceWidth : 0;
+  // Fit the whole chart inside the available area on both axes (never just
+  // width) so a tall scanned page never needs to scroll — the smaller of
+  // the two ratios is what actually constrains it, the same as
+  // resizeMode="contain" but computed up front so overlay badges can be
+  // positioned against the same scale.
+  const scale =
+    containerSize.width > 0 && containerSize.height > 0
+      ? Math.min(containerSize.width / sourceWidth, containerSize.height / sourceHeight)
+      : 0;
 
   const chordOverlays: ChordOverlay[] = song.sections.flatMap((section) =>
     section.lines.flatMap((line) =>
@@ -245,16 +253,19 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
           </View>
       </View>
 
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <View style={styles.chartArea}>
         <View
-          ref={(node) => {
-            hitAreaRef.current = node;
-            if (viewShotRef) viewShotRef.current = node;
-          }}
-          collapsable={false}
-          style={{ aspectRatio: sourceWidth / sourceHeight }}
-          onLayout={(e) => setDisplayWidth(e.nativeEvent.layout.width)}
+          style={styles.chartAreaInner}
+          onLayout={(e) => setContainerSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
         >
+          <View
+            ref={(node) => {
+              hitAreaRef.current = node;
+              if (viewShotRef) viewShotRef.current = node;
+            }}
+            collapsable={false}
+            style={{ width: sourceWidth * scale, height: sourceHeight * scale }}
+          >
           <Pressable
             style={StyleSheet.absoluteFill}
             disabled={!addChordMode || comparing}
@@ -343,8 +354,9 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
                 />
               );
             })()}
+          </View>
         </View>
-      </ScrollView>
+      </View>
 
       <ConfirmModal
         visible={pendingAction !== null}
@@ -434,11 +446,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollArea: {
+  chartArea: {
     flex: 1,
-  },
-  scrollContent: {
     padding: 16,
+  },
+  // No padding of its own — its onLayout size is exactly the space left
+  // over after chartArea's padding, which is what the fit-to-screen scale
+  // calculation needs.
+  chartAreaInner: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   // Sits outside the ScrollView (see the component body) so it stays fixed
   // in place while the chart scrolls underneath — the bottom border/background
