@@ -4,6 +4,8 @@ import { Image, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput
 import type { GestureResponderEvent } from "react-native";
 
 import type { Segment, SectionMarker, Song } from "../../../types/song";
+import { currentKey } from "../../transpose";
+import { countChordIssues, reviewSegmentChord } from "../chordReview";
 import {
   addChord,
   addSectionMarker,
@@ -25,6 +27,8 @@ interface SourceOverlayScreenProps {
   onSongChange: (song: Song) => void;
   /** Ref attached to the capturable image+overlay area, so a parent screen can snapshot it for export. */
   viewShotRef?: RefObject<View | null>;
+  /** Highlight chords that need review. Turned off while exporting so the highlight never ends up in a shared chart. */
+  showReviewFlags?: boolean;
 }
 
 interface ChordOverlay {
@@ -66,7 +70,7 @@ const DEFAULT_CHORD_HEIGHT_RATIO = 0.025;
  * Toggling "+ 코드 추가" lets a chord OCR missed completely be placed by
  * tapping the blank spot it belongs at.
  */
-export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceOverlayScreenProps) {
+export function SourceOverlayScreen({ song, onSongChange, viewShotRef, showReviewFlags = true }: SourceOverlayScreenProps) {
   const [displayWidth, setDisplayWidth] = useState(0);
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -129,6 +133,8 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
   // failed load for an unknown URL scheme.
   const uri = resolvedImageUri ?? (isWebImageRef(sourceUri) ? undefined : sourceUri);
   const scale = displayWidth > 0 ? displayWidth / sourceWidth : 0;
+  const key = currentKey(song);
+  const issueCount = countChordIssues(song, key);
 
   const chordOverlays: ChordOverlay[] = song.sections.flatMap((section) =>
     section.lines.flatMap((line) =>
@@ -295,6 +301,11 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
             </Pressable>
           </View>
         </View>
+        {showReviewFlags && issueCount > 0 && !comparing && (
+          <Text style={[styles.hint, styles.reviewHint]}>
+            주황색 코드 {issueCount}개는 인식이 불확실합니다. 탭해서 고치거나 ✓로 확인하세요.
+          </Text>
+        )}
       </View>
       <View
         ref={viewShotRef}
@@ -352,6 +363,7 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
               <ChordBadge
                 key={segment.id}
                 chord={segment.chord}
+                needsReview={showReviewFlags && reviewSegmentChord(segment, key) !== null}
                 position={position}
                 fontSize={fontSize}
                 scale={scale}
@@ -431,6 +443,8 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef }: SourceO
 
 interface ChordBadgeProps {
   chord: string | null;
+  /** Draws the badge in the review color — see chordReview.ts for what gets flagged. */
+  needsReview: boolean;
   position: { left: number; top: number };
   fontSize: number;
   /** display-px-per-source-px, used to convert a drag's screen-space delta back into source-image coordinates. */
@@ -445,7 +459,7 @@ interface ChordBadgeProps {
  * further is treated as a drag, repositioning the badge in real time and
  * committing the new position on release.
  */
-function ChordBadge({ chord, position, fontSize, scale, onTap, onMove }: ChordBadgeProps) {
+function ChordBadge({ chord, needsReview, position, fontSize, scale, onTap, onMove }: ChordBadgeProps) {
   const [dragOffset, setDragOffset] = useState({ dx: 0, dy: 0 });
   const draggedRef = useRef(false);
 
@@ -489,9 +503,13 @@ function ChordBadge({ chord, position, fontSize, scale, onTap, onMove }: ChordBa
     <View
       {...panResponder.panHandlers}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      style={[styles.chordBadge, { left: position.left + dragOffset.dx, top: position.top + dragOffset.dy }]}
+      style={[
+        styles.chordBadge,
+        needsReview && styles.chordBadgeReview,
+        { left: position.left + dragOffset.dx, top: position.top + dragOffset.dy },
+      ]}
     >
-      <Text style={[styles.chordText, { fontSize }]}>{chord}</Text>
+      <Text style={[styles.chordText, needsReview && styles.chordTextReview, { fontSize }]}>{chord}</Text>
     </View>
   );
 }
@@ -670,6 +688,19 @@ const styles = StyleSheet.create({
   chordText: {
     color: "#2f6feb",
     fontWeight: "700",
+  },
+  chordBadgeReview: {
+    backgroundColor: "#fff4e0",
+    borderBottomWidth: 2,
+    borderBottomColor: "#e08a00",
+  },
+  chordTextReview: {
+    color: "#b56a00",
+  },
+  reviewHint: {
+    width: "100%",
+    color: "#b56a00",
+    fontWeight: "600",
   },
   editingGroup: {
     position: "absolute",

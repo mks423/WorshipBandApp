@@ -9,6 +9,7 @@ import {
   type Key,
 } from "../../domain/music-theory";
 import type { Song } from "../../types/song";
+import { isChordToken } from "../chord-scan/chordPattern";
 import { guessKeyFromFirstChord } from "./chordTheory";
 
 /**
@@ -57,7 +58,13 @@ export function transposeSong(song: Song, semitones: number): Song {
       lines: section.lines.map((line) => ({
         ...line,
         segments: line.segments.map((segment) =>
-          segment.chord ? { ...segment, chord: transposeChordText(segment.chord, from, to) } : segment
+          // An OCR misread like "Acad" starts with a note letter but isn't a
+          // chord; moving just its first letter ("Ccad") would make it look
+          // like a real, transposed chord. Leave it exactly as read so the
+          // review UI can flag it for the user to fix.
+          segment.chord && isChordToken(segment.chord)
+            ? { ...segment, chord: transposeChordText(segment.chord, from, to) }
+            : segment
         ),
       })),
     })),

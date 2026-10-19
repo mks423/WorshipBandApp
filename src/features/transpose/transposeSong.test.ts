@@ -68,6 +68,11 @@ describe("transposeSong", () => {
     expect(chordsOf(song)).toEqual(["A", "N.C.", "D"]);
   });
 
+  it("leaves OCR misreads untouched instead of moving their first letter", () => {
+    const song = transposeSong(songWithChords(["A", "Acad", "BVE", "A(add2)"], "A"), 3);
+    expect(chordsOf(song)).toEqual(["C", "Acad", "BVE", "C(add2)"]);
+  });
+
   it("does not mutate the input song", () => {
     const original = songWithChords(["G", "C"], "G");
     transposeSong(original, 3);

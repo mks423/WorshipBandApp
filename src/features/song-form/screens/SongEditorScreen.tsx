@@ -44,6 +44,10 @@ export function SongEditorScreen({
   async function handleExport(kind: "image" | "pdf") {
     setExporting(true);
     try {
+      // `exporting` hides the review highlight; wait for that re-render to
+      // reach the screen before capturing, or the snapshot still has it.
+      await nextFrame();
+      await nextFrame();
       if (kind === "image") {
         await exportPageAsImage(overlayRef, song.title);
       } else {
@@ -92,7 +96,12 @@ export function SongEditorScreen({
         </View>
       </View>
 
-      <SourceOverlayScreen song={song} onSongChange={onSongChange} viewShotRef={overlayRef} />
+      <SourceOverlayScreen
+        song={song}
+        onSongChange={onSongChange}
+        viewShotRef={overlayRef}
+        showReviewFlags={!exporting}
+      />
 
       {showPageNav && (
         <View style={styles.pageNavRow}>
@@ -153,6 +162,10 @@ export function SongEditorScreen({
       />
     </View>
   );
+}
+
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 /** Falls back to the raw `originalKey` text if it isn't a key name we can parse (e.g. hand-typed). */
