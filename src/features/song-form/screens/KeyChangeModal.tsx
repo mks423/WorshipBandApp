@@ -1,6 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { CHROMATIC_KEYS, semitonesBetweenKeys, transposeChord, transposeSong, transposeSongToKey } from "../../transpose";
+import { formatKey, pitchClass } from "../../../domain/music-theory";
+import { currentKey, keyChoicesForSong, transposeSong, transposeSongToKey } from "../../transpose";
 import type { Song } from "../../../types/song";
 
 interface KeyChangeModalProps {
@@ -16,7 +17,7 @@ interface KeyChangeModalProps {
  * real time as the user steps semitones or jumps to a key.
  */
 export function KeyChangeModal({ visible, song, onSongChange, onClose }: KeyChangeModalProps) {
-  const currentKey = song.originalKey ? transposeChord(song.originalKey, song.transposeSteps) : null;
+  const key = currentKey(song);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -24,7 +25,7 @@ export function KeyChangeModal({ visible, song, onSongChange, onClose }: KeyChan
         <View style={styles.sheet}>
           <Text style={styles.title}>키 변경</Text>
           <Text style={styles.subtitle}>
-            원key {song.originalKey ?? "알 수 없음"} · 현재 키 {currentKey ?? "알 수 없음"}
+            원key {song.originalKey ?? "알 수 없음"} · 현재 키 {key ? formatKey(key) : "알 수 없음"}
           </Text>
 
           <View style={styles.stepperRow}>
@@ -40,17 +41,18 @@ export function KeyChangeModal({ visible, song, onSongChange, onClose }: KeyChan
             </Pressable>
           </View>
 
-          {currentKey && (
+          {key && (
             <View style={styles.keyGrid}>
-              {CHROMATIC_KEYS.map((key) => {
-                const active = semitonesBetweenKeys(currentKey, key) === 0;
+              {keyChoicesForSong(song).map((choice) => {
+                const name = formatKey(choice);
+                const active = pitchClass(choice.tonic) === pitchClass(key.tonic);
                 return (
                   <Pressable
-                    key={key}
+                    key={name}
                     style={[styles.keyButton, active && styles.keyButtonActive]}
-                    onPress={() => onSongChange(transposeSongToKey(song, currentKey, key))}
+                    onPress={() => onSongChange(transposeSongToKey(song, choice))}
                   >
-                    <Text style={[styles.keyButtonText, active && styles.keyButtonTextActive]}>{key}</Text>
+                    <Text style={[styles.keyButtonText, active && styles.keyButtonTextActive]}>{name}</Text>
                   </Pressable>
                 );
               })}

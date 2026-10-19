@@ -1,2 +1,2 @@
-export { transposeChord, semitonesBetweenKeys, detectOriginalKey, CHROMATIC_KEYS } from "./chordTheory";
-export { transposeSong, transposeSongToKey } from "./transposeSong";
+export { detectOriginalKey, guessKeyFromFirstChord, semitonesBetweenKeys } from "./chordTheory";
+export { currentKey, keyChoicesForSong, transposeSong, transposeSongToKey } from "./transposeSong";

@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { transposeChord } from "../../transpose";
+import { formatKey } from "../../../domain/music-theory";
+import { currentKey } from "../../transpose";
 import type { Song } from "../../../types/song";
 import { alertCompat } from "../../../utils/alertCompat";
 import { exportPageAsImage, exportPageAsPdf } from "../exportSong";
@@ -68,9 +69,7 @@ export function SongEditorScreen({
         <View style={styles.keyInfoRow}>
           <Text style={styles.keyInfoText}>인식된 키: {song.originalKey ?? "알 수 없음"}</Text>
           {song.originalKey && (
-            <Text style={styles.keyInfoText}>
-              현재 키: {transposeChord(song.originalKey, song.transposeSteps)}
-            </Text>
+            <Text style={styles.keyInfoText}>현재 키: {currentKeyLabel(song)}</Text>
           )}
           <View style={styles.bpmRow}>
             <Text style={styles.keyInfoText}>BPM</Text>
@@ -154,6 +153,12 @@ export function SongEditorScreen({
       />
     </View>
   );
+}
+
+/** Falls back to the raw `originalKey` text if it isn't a key name we can parse (e.g. hand-typed). */
+function currentKeyLabel(song: Song): string {
+  const key = currentKey(song);
+  return key ? formatKey(key) : (song.originalKey ?? "알 수 없음");
 }
 
 const styles = StyleSheet.create({
