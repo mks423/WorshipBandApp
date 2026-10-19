@@ -4,8 +4,11 @@ import { Image, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput
 import type { GestureResponderEvent } from "react-native";
 
 import type { Segment, SectionMarker, Song } from "../../../types/song";
-import { currentKey } from "../../transpose";
-import { countChordIssues, reviewSegmentChord } from "../chordReview";
+import { countChordIssues, reviewKeys, reviewSegmentChord } from "../chordReview";
+import { applySuggestion, buildRereadItems, toSuggestions, type ChordSuggestion } from "../aiSuggestions";
+import { createClaudeRereader, getAnthropicApiKey } from "../../chord-scan/aiReread/claudeRereader";
+import { alertCompat } from "../../../utils/alertCompat";
+import { loadImageBase64 } from "../../../utils/loadImageBase64";
 import {
   addChord,
   addSectionMarker,
@@ -18,6 +21,10 @@ import {
 import { ConfirmModal } from "./ConfirmModal";
 import { SectionLabelModal } from "./SectionLabelModal";
 import { isWebImageRef, resolveWebImageUri } from "../../../utils/webImageStore";
+
+/** Null when no AI key is configured — the re-read button simply doesn't appear. */
+const anthropicApiKey = getAnthropicApiKey();
+const chordRereader = anthropicApiKey ? createClaudeRereader(anthropicApiKey) : null;
 
 /** A touch that moves less than this (in screen px) is treated as a tap, not a drag. */
 const DRAG_THRESHOLD = 4;
@@ -82,6 +89,10 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef, showRevie
   const [addSectionMode, setAddSectionMode] = useState(false);
   const [labelModalState, setLabelModalState] = useState<LabelModalState | null>(null);
   const [resolvedImageUri, setResolvedImageUri] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Map<string, ChordSuggestion>>(new Map());
+  const [rereading, setRereading] = useState(false);
+  const [rereadNote, setRereadNote] = useState<string | null>(null);
+  const [pendingSuggestion, setPendingSuggestion] = useState<{ segmentId: string; from: string } | null>(null);
 
   // On web, a saved image is stored as a wba-idb:// reference (see
   // webImageStore.ts) rather than something <Image> can render directly —
@@ -117,6 +128,9 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef, showRevie
     setPendingAction(null);
     setAddSectionMode(false);
     setLabelModalState(null);
+    setSuggestions(new Map());
+    setRereadNote(null);
+    setPendingSuggestion(null);
   }, [song.id]);
 
   if (!song.sourceImage) {
@@ -133,8 +147,16 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef, showRevie
   // failed load for an unknown URL scheme.
   const uri = resolvedImageUri ?? (isWebImageRef(sourceUri) ? undefined : sourceUri);
   const scale = displayWidth > 0 ? displayWidth / sourceWidth : 0;
-  const key = currentKey(song);
-  const issueCount = countChordIssues(song, key);
+  const keys = reviewKeys(song);
+  const issueCount = countChordIssues(song);
+  // A suggestion only stays relevant while its chord is still flagged — once
+  // the user fixes or confirms that chord by hand, the suggestion is moot.
+  const flaggedIds = new Set(
+    song.sections.flatMap((s) => s.lines.flatMap((l) => l.segments))
+      .filter((segment) => reviewSegmentChord(segment, keys) !== null)
+      .map((segment) => segment.id)
+  );
+  const liveSuggestions = [...suggestions].filter(([id]) => flaggedIds.has(id));
 
   const chordOverlays: ChordOverlay[] = song.sections.flatMap((section) =>
     section.lines.flatMap((line) =>
@@ -148,6 +170,51 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef, showRevie
         }))
     )
   );
+
+  async function rereadWithAi() {
+    if (!chordRereader || !song.sourceImage || rereading) return;
+    const { items, printedKeyName } = buildRereadItems(song);
+    if (items.length === 0) return;
+    setRereading(true);
+    setRereadNote(null);
+    try {
+      const image = await loadImageBase64(song.sourceImage.uri);
+      const results = await chordRereader.reread({
+        image: { ...image, width: song.sourceImage.width, height: song.sourceImage.height },
+        printedKey: printedKeyName,
+        items,
+      });
+      const found = toSuggestions(song, items, results);
+      setSuggestions(found);
+      const unread = items.length - found.size;
+      setRereadNote(unread > 0 ? `${unread}개는 AI도 확실히 읽지 못했습니다. 직접 확인해 주세요.` : null);
+    } catch (error) {
+      alertCompat("AI 다시 읽기 실패", error instanceof Error ? error.message : String(error));
+    } finally {
+      setRereading(false);
+    }
+  }
+
+  function acceptSuggestion(segmentId: string) {
+    const suggestion = suggestions.get(segmentId);
+    if (suggestion) onSongChange(applySuggestion(song, segmentId, suggestion));
+    dropSuggestion(segmentId);
+  }
+
+  function dropSuggestion(segmentId: string) {
+    setSuggestions((prev) => {
+      const next = new Map(prev);
+      next.delete(segmentId);
+      return next;
+    });
+  }
+
+  function acceptAllSuggestions() {
+    let next = song;
+    for (const [segmentId, suggestion] of liveSuggestions) next = applySuggestion(next, segmentId, suggestion);
+    onSongChange(next);
+    setSuggestions(new Map());
+  }
 
   function closeEditing() {
     setEditingSegmentId(null);
@@ -306,6 +373,28 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef, showRevie
             주황색 코드 {issueCount}개는 인식이 불확실합니다. 탭해서 고치거나 ✓로 확인하세요.
           </Text>
         )}
+        {showReviewFlags && !comparing && chordRereader && issueCount > 0 && (
+          <View style={styles.aiRow}>
+            <Pressable
+              style={[styles.aiButton, rereading && styles.aiButtonBusy]}
+              disabled={rereading}
+              onPress={rereadWithAi}
+            >
+              <Text style={styles.aiButtonText}>{rereading ? "AI가 읽는 중…" : "AI로 다시 읽기"}</Text>
+            </Pressable>
+            {liveSuggestions.length > 0 && (
+              <Pressable style={styles.aiAcceptAllButton} onPress={acceptAllSuggestions}>
+                <Text style={styles.aiAcceptAllText}>제안 {liveSuggestions.length}개 모두 적용</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+        {showReviewFlags && !comparing && liveSuggestions.length > 0 && (
+          <Text style={[styles.hint, styles.suggestionHint]}>
+            초록색은 AI 제안입니다. 원본과 비교한 뒤 탭해서 적용하세요.
+          </Text>
+        )}
+        {showReviewFlags && !comparing && rereadNote && <Text style={[styles.hint, styles.reviewHint]}>{rereadNote}</Text>}
       </View>
       <View
         ref={viewShotRef}
@@ -363,11 +452,16 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef, showRevie
               <ChordBadge
                 key={segment.id}
                 chord={segment.chord}
-                needsReview={showReviewFlags && reviewSegmentChord(segment, key) !== null}
+                needsReview={showReviewFlags && flaggedIds.has(segment.id)}
+                suggestion={showReviewFlags && flaggedIds.has(segment.id) ? suggestions.get(segment.id) : undefined}
                 position={position}
                 fontSize={fontSize}
                 scale={scale}
                 onTap={() => {
+                  if (flaggedIds.has(segment.id) && suggestions.has(segment.id)) {
+                    setPendingSuggestion({ segmentId: segment.id, from: segment.chord ?? "" });
+                    return;
+                  }
                   setEditingSegmentId(segment.id);
                   setEditingText(segment.chord ?? "");
                 }}
@@ -425,6 +519,24 @@ export function SourceOverlayScreen({ song, onSongChange, viewShotRef, showRevie
       />
 
       <ConfirmModal
+        visible={pendingSuggestion !== null}
+        title="AI 제안 적용"
+        message={
+          pendingSuggestion
+            ? `"${pendingSuggestion.from}" → ${describeSuggestion(suggestions.get(pendingSuggestion.segmentId))}\n취소하면 이 제안을 버리고 직접 수정할 수 있습니다.`
+            : ""
+        }
+        confirmLabel="적용"
+        onConfirm={() => {
+          if (pendingSuggestion) acceptSuggestion(pendingSuggestion.segmentId);
+          setPendingSuggestion(null);
+        }}
+        onCancel={() => {
+          if (pendingSuggestion) dropSuggestion(pendingSuggestion.segmentId);
+          setPendingSuggestion(null);
+        }}
+      />
+      <ConfirmModal
         visible={pendingAction !== null}
         title={pendingAction?.kind === "delete" ? "코드 삭제" : "코드 수정"}
         message={
@@ -445,6 +557,8 @@ interface ChordBadgeProps {
   chord: string | null;
   /** Draws the badge in the review color — see chordReview.ts for what gets flagged. */
   needsReview: boolean;
+  /** An AI re-read waiting for the user's decision, shown next to the original reading. */
+  suggestion?: ChordSuggestion;
   position: { left: number; top: number };
   fontSize: number;
   /** display-px-per-source-px, used to convert a drag's screen-space delta back into source-image coordinates. */
@@ -459,7 +573,7 @@ interface ChordBadgeProps {
  * further is treated as a drag, repositioning the badge in real time and
  * committing the new position on release.
  */
-function ChordBadge({ chord, needsReview, position, fontSize, scale, onTap, onMove }: ChordBadgeProps) {
+function ChordBadge({ chord, needsReview, suggestion, position, fontSize, scale, onTap, onMove }: ChordBadgeProps) {
   const [dragOffset, setDragOffset] = useState({ dx: 0, dy: 0 });
   const draggedRef = useRef(false);
 
@@ -506,12 +620,23 @@ function ChordBadge({ chord, needsReview, position, fontSize, scale, onTap, onMo
       style={[
         styles.chordBadge,
         needsReview && styles.chordBadgeReview,
+        suggestion && styles.chordBadgeSuggestion,
         { left: position.left + dragOffset.dx, top: position.top + dragOffset.dy },
       ]}
     >
-      <Text style={[styles.chordText, needsReview && styles.chordTextReview, { fontSize }]}>{chord}</Text>
+      <Text style={[styles.chordText, needsReview && styles.chordTextReview, { fontSize }]}>
+        {chord}
+        {suggestion && <Text style={styles.chordTextSuggestion}> → {describeSuggestion(suggestion)}</Text>}
+      </Text>
     </View>
   );
+}
+
+/** "A(add2)", "F/C A Bb", "(삭제)"; a "?" marks answers the AI itself wasn't sure of. */
+function describeSuggestion(suggestion: ChordSuggestion | undefined): string {
+  if (!suggestion) return "";
+  const text = suggestion.kind === "remove" ? "(삭제)" : suggestion.chords.join(" ");
+  return suggestion.confident ? text : `${text}?`;
 }
 
 interface SectionMarkerBadgeProps {
@@ -696,6 +821,49 @@ const styles = StyleSheet.create({
   },
   chordTextReview: {
     color: "#b56a00",
+  },
+  chordBadgeSuggestion: {
+    backgroundColor: "#e8f6ec",
+    borderBottomColor: "#2e9e4f",
+  },
+  chordTextSuggestion: {
+    color: "#2e9e4f",
+  },
+  suggestionHint: {
+    width: "100%",
+    color: "#2e9e4f",
+    fontWeight: "600",
+  },
+  aiRow: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 8,
+  },
+  aiButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#2e9e4f",
+  },
+  aiButtonBusy: {
+    opacity: 0.6,
+  },
+  aiButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  aiAcceptAllButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#2e9e4f",
+  },
+  aiAcceptAllText: {
+    color: "#2e9e4f",
+    fontWeight: "700",
+    fontSize: 12,
   },
   reviewHint: {
     width: "100%",

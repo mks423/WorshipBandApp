@@ -1,9 +1,11 @@
-import { parseKey } from "../../domain/music-theory";
+import { parseKey, type Key } from "../../domain/music-theory";
 import { createEmptySong, createLine, createSection, createSegment } from "../../types/song";
+import { transposeSong } from "../transpose";
 import { countChordIssues, reviewSegmentChord } from "./chordReview";
 
-const A = parseKey("A");
-const F = parseKey("F");
+const at = (key: Key | null) => ({ current: key, printed: key });
+const A = at(parseKey("A"));
+const F = at(parseKey("F"));
 const ocr = (chord: string) => createSegment({ chord, lyric: "x", confidence: 0.8 });
 
 describe("reviewSegmentChord", () => {
@@ -44,15 +46,25 @@ describe("reviewSegmentChord", () => {
   });
 
   it("skips the key-based check when the key is unknown", () => {
-    expect(reviewSegmentChord(ocr("A/C"), null)).toBeNull();
-    expect(reviewSegmentChord(ocr("Acad"), null)).toBe("unrecognized");
+    expect(reviewSegmentChord(ocr("A/C"), at(null))).toBeNull();
+    expect(reviewSegmentChord(ocr("Acad"), at(null))).toBe("unrecognized");
   });
 });
 
 describe("countChordIssues", () => {
   it("counts flagged slots across the whole song", () => {
     const song = createEmptySong("t");
+    song.originalKey = "A";
     song.sections.push(createSection("V", [createLine([ocr("A"), ocr("Acad"), ocr("A/C"), ocr("E/A")])]));
-    expect(countChordIssues(song, A)).toBe(2);
+    expect(countChordIssues(song)).toBe(2);
+  });
+
+  it("keeps a dropped-accidental flag after the song is transposed", () => {
+    const song = createEmptySong("t");
+    song.originalKey = "A";
+    song.sections.push(createSection("V", [createLine([ocr("A"), ocr("A/C"), ocr("E/A")])]));
+    for (let steps = 1; steps < 12; steps++) {
+      expect(countChordIssues(transposeSong(song, steps))).toBe(1);
+    }
   });
 });

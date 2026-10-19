@@ -27,6 +27,18 @@ export function currentKey(song: Song): Key | null {
   return guessKeyFromFirstChord(song);
 }
 
+/**
+ * The key the source image is printed in — what a fresh reading of the
+ * original chart would be in, regardless of how far the song has since
+ * been transposed.
+ */
+export function printedKey(song: Song): Key | null {
+  const original = song.originalKey ? parseKey(song.originalKey) : null;
+  if (original) return original;
+  const current = guessKeyFromFirstChord(song);
+  return current ? keyAtOffset(current, -song.transposeSteps) : null;
+}
+
 function keyAtOffset(original: Key, steps: number): Key {
   if (mod(steps, 12) === 0) return original;
   return keyForPitchClass(pitchClass(original.tonic) + steps, original.mode, keyUsesFlats(original));
